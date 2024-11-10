@@ -1,0 +1,3 @@
+target_height: 10.2
+height_tolerance: 0.2
+max_episode_steps: 500
