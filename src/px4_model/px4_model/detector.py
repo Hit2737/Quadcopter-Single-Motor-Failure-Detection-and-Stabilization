@@ -1,16 +1,17 @@
+import os
+import sys
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from px4_msgs.msg import SensorCombined, VehicleGlobalPosition, SensorGps
 from std_msgs.msg import Float32MultiArray
 
-import torch
-from px4_model.detection_model import MotorFailureDetectionModel
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
-import joblib
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from failure_detection_model.model import MotorFailureDetectionModel
 
 class FailureDetector(Node):
-    def __init__(self, file_path, scaler_path):
+    def __init__(self, file_path):
         super().__init__('failure_detector')
 
         # Parameters
@@ -19,17 +20,6 @@ class FailureDetector(Node):
         self.input_data = []
         
         # Initialize the model
-        input_size = 16
-        hidden_size = 64
-        num_layers = 3
-        output_size = 5
-        dropout_prob = 0.3
-        self.model = MotorFailureDetectionModel(input_size, hidden_size, num_layers, output_size, dropout_prob)
-        self.model.load_model(file_path)
-        self.model.eval()
-        
-        # Load the StandardScaler
-        self.scaler = joblib.load(scaler_path)
         
         # Initialize data storage
         self.sensor_combined_data = None
@@ -65,37 +55,7 @@ class FailureDetector(Node):
     
     def predict_failure(self):
         if self.sensor_combined_data and self.vehicle_gps_position_data and self.vehicle_global_position_data:
-            # Combine the data into a single input tensor
-            while len(self.input_data) >= self.sequence_length:
-                self.input_data.pop(0)
-            combined_data = self.sensor_combined_data[1:] + self.vehicle_gps_position_data[1:] + self.vehicle_global_position_data[1:]
-            self.input_data.append(combined_data)
-            
-            # Normalize the input data
-            input_data_normalized = self.scaler.transform(self.input_data)
-            input_tensor = torch.tensor(input_data_normalized, dtype=torch.float32).unsqueeze(0)
-            
-            # Make a prediction
-            with torch.no_grad():
-                lengths = torch.tensor([input_tensor.shape[1]])
-                output = self.model(input_tensor, lengths)
-                prediction = (output > 0.5).float().cpu().numpy()
-
-            # Extract is_failure and motor_num
-            is_failure = prediction[0][-1][0]
-            motor_num = 0
-            if is_failure:
-                for i in range(1, 5):
-                    if prediction[0][-1][i]:
-                        motor_num = i
-                        break
-            
-            # Print the prediction
-            print(f"Prediction: [is_failure: {is_failure}, motor_num: {motor_num}]")
-            
-            # Publish the prediction
-            prediction_msg = Float32MultiArray(data=[is_failure, motor_num])
-            self.failure_detection_publisher.publish(prediction_msg)
+            # Prepare input data
             
             # Reset data storage
             self.sensor_combined_data = None
@@ -104,9 +64,8 @@ class FailureDetector(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    file_path = 'src/px4_model/models/Failure-Detection-0.pth'
-    scaler_path = 'src/px4_model/models/scaler.pkl'
-    failure_detector = FailureDetector(file_path, scaler_path)
+    file_path = 'src/px4_model/models/Failure-Detection-0.h5'
+    failure_detector = FailureDetector(file_path)
     rclpy.spin(failure_detector)
     failure_detector.destroy_node()
     rclpy.shutdown()
