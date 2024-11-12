@@ -5,21 +5,23 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from px4_msgs.msg import SensorCombined, VehicleGlobalPosition, SensorGps
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Int32
+
+from tensorflow.keras.models import load_model
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from failure_detection_model.model import MotorFailureDetectionModel
 
 class FailureDetector(Node):
-    def __init__(self, file_path):
+    def __init__(self, file_path, frequency=100):
         super().__init__('failure_detector')
 
         # Parameters
-        self.frequency = 10
-        self.sequence_length = 10
+        self.frequency = frequency
         self.input_data = []
         
         # Initialize the model
+        self.model = load_model(file_path)
+        self.sequence_length = self.model.input_shape[1]
         
         # Initialize data storage
         self.sensor_combined_data = None
@@ -39,7 +41,7 @@ class FailureDetector(Node):
         self.create_subscription(VehicleGlobalPosition, '/fmu/out/vehicle_global_position', self.vehicle_global_position_callback, qos_profile)
 
         # Create a publisher for the failure detection topic
-        self.failure_detection_publisher = self.create_publisher(Float32MultiArray, '/failure_detection', qos_profile)
+        self.failure_detection_publisher = self.create_publisher(Int32, '/failure_detection', qos_profile)
         
         # Create a timer to call the prediction function at a regular interval
         self.timer = self.create_timer(1/self.frequency, self.predict_failure)
@@ -56,6 +58,27 @@ class FailureDetector(Node):
     def predict_failure(self):
         if self.sensor_combined_data and self.vehicle_gps_position_data and self.vehicle_global_position_data:
             # Prepare input data
+            if len(self.input_data) < self.sequence_length:
+                self.input_data.append(self.sensor_combined_data + self.vehicle_gps_position_data + self.vehicle_global_position_data)
+            else:
+                self.input_data.pop(0)
+                self.input_data.append(self.sensor_combined_data + self.vehicle_gps_position_data + self.vehicle_global_position_data)
+                
+                # Predict the failure
+                input_data = [self.input_data]
+                prediction = self.model.predict(input_data)
+                failure = int(prediction[0][0] < 0.5)
+                if failure:
+                    for motor in range(1, 5):
+                        if prediction[0][motor] > 0.5:
+                            self.get_logger().info(f'Motor {motor} is failing')
+                            failure = motor
+                            break
+                
+                # Publish the failure detection
+                msg = Int32()
+                msg.data = failure
+                self.failure_detection_publisher.publish(msg)
             
             # Reset data storage
             self.sensor_combined_data = None
@@ -65,7 +88,8 @@ class FailureDetector(Node):
 def main(args=None):
     rclpy.init(args=args)
     file_path = 'src/px4_model/models/Failure-Detection-0.h5'
-    failure_detector = FailureDetector(file_path)
+    frequency = 100
+    failure_detector = FailureDetector(file_path, frequency)
     rclpy.spin(failure_detector)
     failure_detector.destroy_node()
     rclpy.shutdown()
