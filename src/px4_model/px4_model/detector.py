@@ -64,15 +64,16 @@ class FailureDetector(Node):
             self.gyroXl5 = True
         if(msg.gyro_rad[1] < -5):
             self.gyroYl5 = True
-        
-        if self.gyroXg5 and self.gyroYl5:
-            self.failed_motor = 1
-        elif self.gyroXl5 and self.gyroYg5:
-            self.failed_motor = 2
-        elif self.gyroXl5 and self.gyroYl5:
-            self.failed_motor = 3
-        elif self.gyroXg5 and self.gyroYg5:
-            self.failed_motor = 4
+            
+        if self.failed_motor == -1:
+            if self.gyroXg5 and self.gyroYl5:
+                self.failed_motor = 1
+            elif self.gyroXl5 and self.gyroYg5:
+                self.failed_motor = 2
+            elif self.gyroXl5 and self.gyroYl5:
+                self.failed_motor = 3
+            elif self.gyroXg5 and self.gyroYg5:
+                self.failed_motor = 4
         
         print("Failed Motor: ", self.failed_motor)
     
