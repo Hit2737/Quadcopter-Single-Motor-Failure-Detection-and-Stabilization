@@ -95,7 +95,6 @@ class FailureDetector(Node):
         self.sensor_combined_data = None
         self.vehicle_gps_position_data = None
         self.vehicle_global_position_data = None
-        self.failed_motor = -1
 
 def main(args=None):
     rclpy.init(args=args)
