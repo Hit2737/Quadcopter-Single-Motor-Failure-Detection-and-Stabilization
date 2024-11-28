@@ -75,11 +75,6 @@ class FailureDetector(Node):
             self.failed_motor = 4
         
         print("Failed Motor: ", self.failed_motor)
-
-        self.gyroXg5 = False
-        self.gyroYg5 = False
-        self.gyroXl5 = False
-        self.gyroYl5 = False
     
     def vehicle_gps_position_callback(self, msg):
         self.vehicle_gps_position_data = [msg.timestamp, msg.latitude_deg, msg.longitude_deg, msg.altitude_msl_m, msg.vel_m_s, msg.vel_n_m_s, msg.vel_e_m_s, msg.vel_d_m_s]
