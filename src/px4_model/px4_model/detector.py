@@ -24,9 +24,9 @@ class FailureDetector(Node):
         # self.sequence_length = self.model.input_shape[1]
         
         self.gyroXg5 = False
-        self.gyroYg5 = False
+        self.gyroYg3 = False
         self.gyroXl5 = False
-        self.gyroYl5 = False
+        self.gyroYl3 = False
         self.acc_flag = False
         self.vel_flag = False
         self.failed_motor = -1
@@ -56,23 +56,23 @@ class FailureDetector(Node):
         
     def sensor_combined_callback(self, msg):
         
-        if(msg.gyro_rad[0] > 5):
+        if(not self.gyroXl5 and msg.gyro_rad[0] > 5):
             self.gyroXg5 = True
-        if(msg.gyro_rad[1] > 5):
-            self.gyroYg5 = True
-        if(msg.gyro_rad[0] < -5):
+        if(not self.gyroYl3 and msg.gyro_rad[1] > 3):
+            self.gyroYg3 = True
+        if(not self.gyroXg5 and msg.gyro_rad[0] < -5):
             self.gyroXl5 = True
-        if(msg.gyro_rad[1] < -5):
-            self.gyroYl5 = True
+        if(not self.gyroYg3 and msg.gyro_rad[1] < -3):
+            self.gyroYl3 = True
             
         if self.failed_motor == -1:
-            if self.gyroXg5 and self.gyroYl5:
+            if self.gyroXg5 and self.gyroYl3:
                 self.failed_motor = 1
-            elif self.gyroXl5 and self.gyroYg5:
+            elif self.gyroXl5 and self.gyroYg3:
                 self.failed_motor = 2
-            elif self.gyroXl5 and self.gyroYl5:
+            elif self.gyroXl5 and self.gyroYl3:
                 self.failed_motor = 3
-            elif self.gyroXg5 and self.gyroYg5:
+            elif self.gyroXg5 and self.gyroYg3:
                 self.failed_motor = 4
         
         print("Failed Motor: ", self.failed_motor)
