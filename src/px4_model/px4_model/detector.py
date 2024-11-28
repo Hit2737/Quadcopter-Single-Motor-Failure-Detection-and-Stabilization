@@ -23,7 +23,10 @@ class FailureDetector(Node):
         # self.model = load_model(file_path)
         # self.sequence_length = self.model.input_shape[1]
         
-        self.gyro_flag = False
+        self.gyroXg5 = False
+        self.gyroYg5 = False
+        self.gyroXl5 = False
+        self.gyroYl5 = False
         self.acc_flag = False
         self.vel_flag = False
         self.failed_motor = -1
@@ -52,7 +55,31 @@ class FailureDetector(Node):
         self.timer = self.create_timer(1/self.frequency, self.predict_failure)
         
     def sensor_combined_callback(self, msg):
-        self.sensor_combined_data = [msg.timestamp] + list(msg.gyro_rad) + list(msg.accelerometer_m_s2)
+        
+        if(msg.gyro_rad[0] > 5):
+            self.gyroXg5 = True
+        if(msg.gyro_rad[1] > 5):
+            self.gyroYg5 = True
+        if(msg.gyro_rad[0] < -5):
+            self.gyroXl5 = True
+        if(msg.gyro_rad[1] < -5):
+            self.gyroYl5 = True
+        
+        if self.gyroXg5 and self.gyroYl5:
+            self.failed_motor = 1
+        elif self.gyroXl5 and self.gyroYg5:
+            self.failed_motor = 2
+        elif self.gyroXl5 and self.gyroYl5:
+            self.failed_motor = 3
+        elif self.gyroXg5 and self.gyroYg5:
+            self.failed_motor = 4
+        
+        print("Failed Motor: ", self.failed_motor)
+
+        self.gyroXg5 = False
+        self.gyroYg5 = False
+        self.gyroXl5 = False
+        self.gyroYl5 = False
     
     def vehicle_gps_position_callback(self, msg):
         self.vehicle_gps_position_data = [msg.timestamp, msg.latitude_deg, msg.longitude_deg, msg.altitude_msl_m, msg.vel_m_s, msg.vel_n_m_s, msg.vel_e_m_s, msg.vel_d_m_s]
@@ -61,43 +88,18 @@ class FailureDetector(Node):
         self.vehicle_global_position_data = [msg.timestamp, msg.lat, msg.lon, msg.alt]
     
     def predict_failure(self):
-        if self.sensor_combined_data and self.vehicle_gps_position_data and self.vehicle_global_position_data:
 
-            # Motor 1
-            if self.sensor_combined_data[1] > 5 and self.sensor_combined_data[2] < 5 and self.sensor_combined_data[3] < 0:
-                self.gyro_flag = True
-                self.failed_motor = 1
-            # Motor 2
-            elif self.sensor_combined_data[1] < -5 and self.sensor_combined_data[2] > 5 and self.sensor_combined_data[3] < 0:
-                self.gyro_flag = True
-                self.failed_motor = 2
-            # Motor 3
-            elif self.sensor_combined_data[1] < -5 and self.sensor_combined_data[2] < -5 and self.sensor_combined_data[3] > 0:
-                self.gyro_flag = True
-                self.failed_motor = 3
-            # Motor 4
-            elif self.sensor_combined_data[1] > 5 and self.sensor_combined_data[2] > 5 and self.sensor_combined_data[3] > 0:
-                self.gyro_flag = True
-                self.failed_motor = 4
-            
-            if abs(self.sensor_combined_data[4]) > 10 or abs(self.sensor_combined_data[5]) > 10 or abs(self.sensor_combined_data[6]) > 20:
-                self.acc_flag = True
-            if abs(self.vehicle_gps_position_data[7]) > 8:
-                self.vel_flag = True
-            
-            # Failure Detected
-            msg = Int32()
-            msg.data = -1
-            if self.gyro_flag and self.acc_flag and self.vel_flag:
-                # Publish the failure
-                msg.data = self.failed_motor
-            self.failure_detection_publisher.publish(msg)
-            
-            # Reset data storage
-            self.sensor_combined_data = None
-            self.vehicle_gps_position_data = None
-            self.vehicle_global_position_data = None
-            self.failed_motor = -1
+        # Failure Detected
+        msg = Int32()
+        # Publish the failure
+        msg.data = self.failed_motor
+        self.failure_detection_publisher.publish(msg)
+        
+        # Reset data storage
+        self.sensor_combined_data = None
+        self.vehicle_gps_position_data = None
+        self.vehicle_global_position_data = None
+        self.failed_motor = -1
 
 def main(args=None):
     rclpy.init(args=args)
