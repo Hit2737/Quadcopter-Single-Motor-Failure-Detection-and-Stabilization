@@ -7,12 +7,12 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from px4_msgs.msg import SensorCombined, VehicleGlobalPosition, SensorGps
 from std_msgs.msg import Int32
 
-from tensorflow.keras.models import load_model
+# from tensorflow.keras.models import load_model
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 class FailureDetector(Node):
-    def __init__(self, file_path, frequency=100):
+    def __init__(self, frequency=100):
         super().__init__('failure_detector')
 
         # Parameters
@@ -20,9 +20,14 @@ class FailureDetector(Node):
         self.input_data = []
         
         # Initialize the model
-        self.model = load_model(file_path)
-        self.sequence_length = self.model.input_shape[1]
+        # self.model = load_model(file_path)
+        # self.sequence_length = self.model.input_shape[1]
         
+        self.gyro_flag = False
+        self.acc_flag = False
+        self.vel_flag = False
+        self.failed_motor = -1
+
         # Initialize data storage
         self.sensor_combined_data = None
         self.vehicle_gps_position_data = None
@@ -57,39 +62,47 @@ class FailureDetector(Node):
     
     def predict_failure(self):
         if self.sensor_combined_data and self.vehicle_gps_position_data and self.vehicle_global_position_data:
-            # Prepare input data
-            if len(self.input_data) < self.sequence_length:
-                self.input_data.append(self.sensor_combined_data + self.vehicle_gps_position_data + self.vehicle_global_position_data)
-            else:
-                self.input_data.pop(0)
-                self.input_data.append(self.sensor_combined_data + self.vehicle_gps_position_data + self.vehicle_global_position_data)
-                
-                # Predict the failure
-                input_data = [self.input_data]
-                prediction = self.model.predict(input_data)
-                failure = int(prediction[0][0] < 0.5)
-                if failure:
-                    for motor in range(1, 5):
-                        if prediction[0][motor] > 0.5:
-                            self.get_logger().info(f'Motor {motor} is failing')
-                            failure = motor
-                            break
-                
-                # Publish the failure detection
-                msg = Int32()
-                msg.data = failure
-                self.failure_detection_publisher.publish(msg)
+
+            # Motor 1
+            if self.sensor_combined_data[1] > 5 and self.sensor_combined_data[2] < 5 and self.sensor_combined_data[3] < 0:
+                self.gyro_flag = True
+                self.failed_motor = 1
+            # Motor 2
+            elif self.sensor_combined_data[1] < -5 and self.sensor_combined_data[2] > 5 and self.sensor_combined_data[3] < 0:
+                self.gyro_flag = True
+                self.failed_motor = 2
+            # Motor 3
+            elif self.sensor_combined_data[1] < -5 and self.sensor_combined_data[2] < -5 and self.sensor_combined_data[3] > 0:
+                self.gyro_flag = True
+                self.failed_motor = 3
+            # Motor 4
+            elif self.sensor_combined_data[1] > 5 and self.sensor_combined_data[2] > 5 and self.sensor_combined_data[3] > 0:
+                self.gyro_flag = True
+                self.failed_motor = 4
+            
+            if abs(self.sensor_combined_data[4]) > 10 or abs(self.sensor_combined_data[5]) > 10 or abs(self.sensor_combined_data[6]) > 20:
+                self.acc_flag = True
+            if abs(self.vehicle_gps_position_data[7]) > 8:
+                self.vel_flag = True
+            
+            # Failure Detected
+            msg = Int32()
+            msg.data = -1
+            if self.gyro_flag and self.acc_flag and self.vel_flag:
+                # Publish the failure
+                msg.data = self.failed_motor
+            self.failure_detection_publisher.publish(msg)
             
             # Reset data storage
             self.sensor_combined_data = None
             self.vehicle_gps_position_data = None
             self.vehicle_global_position_data = None
+            self.failed_motor = -1
 
 def main(args=None):
     rclpy.init(args=args)
-    file_path = 'src/px4_model/models/Failure-Detection-0.h5'
     frequency = 100
-    failure_detector = FailureDetector(file_path, frequency)
+    failure_detector = FailureDetector(frequency)
     rclpy.spin(failure_detector)
     failure_detector.destroy_node()
     rclpy.shutdown()
