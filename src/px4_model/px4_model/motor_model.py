@@ -10,7 +10,55 @@ from std_msgs.msg import Float32MultiArray
 
 import numpy as np
 
-from utils import R_a2_theta, R_a1_phi, R_a3_psi, PIDController
+def R_a2_theta(theta):
+    return np.array([
+        [np.cos(theta), 0, np.sin(theta)],
+        [0, 1, 0],
+        [-np.sin(theta), 0, np.cos(theta)]
+    ])
+
+def R_a1_phi(phi):
+    return np.array([
+        [1, 0, 0],
+        [0, np.cos(phi), -np.sin(phi)],
+        [0, np.sin(phi), np.cos(phi)]
+    ])
+
+def R_a3_psi(psi):
+    return np.array([
+        [np.cos(psi), -np.sin(psi), 0],
+        [np.sin(psi), np.cos(psi), 0],
+        [0, 0, 1]
+    ])
+
+def skew_symmetric(vector):
+    return np.array([
+        [0, -vector[2], vector[1]],
+        [vector[2], 0, -vector[0]],
+        [-vector[1], vector[0], 0]
+    ])
+
+class PIDController:
+    def __init__(self, KP, KD, KI, size = 3, integral_limit = None):
+        self.KP = KP
+        self.KD = KD
+        self.KI = KI
+
+        # Initialize Errors
+        self.integral = np.zeros(size)
+        self.integral_limit = integral_limit
+
+    def update(self, error, derivative_error, dt):
+        # Update integral term
+        self.integral += error * dt
+        
+        if self.integral_limit:
+            self.integral = np.clip(self.integral, -self.integral_limit, self.integral_limit)
+
+        # PID output
+        output = self.KP * error + self.KI * self.integral + self.KD * derivative_error
+
+        return output
 
 class ThrottlePublisher(Node):
     def __init__(self):
@@ -40,8 +88,8 @@ class ThrottlePublisher(Node):
         self.create_subscription(VehicleGlobalPosition, '/fmu/out/vehicle_global_position', self.vehicle_global_position_callback, qos_profile)
 
         self.throttle_values = [0.0, 0.0, 0.0, 0.0]
-        self.dt = 0.005
-        self.publisher_ = self.create_publisher(Float32MultiArray, 'throttle_values', 10)
+        self.dt = 0.05
+        self.publisher_ = self.create_publisher(Float32MultiArray, '/drone/throttle_values', 10)
         self.control_timer = self.create_timer(self.dt, self.update_control_loop)
         self.throttle_timer = self.create_timer(self.dt, self.publish_throttle_values)
 
@@ -76,7 +124,7 @@ class ThrottlePublisher(Node):
 
     def publish_throttle_values(self):
         msg = Float32MultiArray()
-        msg.data = self.throttle_values
+        msg.data = [self.throttle_values[0], self.throttle_values[1], self.throttle_values[2], self.throttle_values[3]]
         self.publisher_.publish(msg)
         # self.get_logger().info(f'Published throttle values: {msg.data}')
 
@@ -99,36 +147,37 @@ class ThrottlePublisher(Node):
         return self.omega
     
     def update_control_loop(self):
-        current_state = [0] * 6
+        if self.sensor_combined_data and self.vehicle_global_position_data:
+            current_state = [0] * 6
 
-        current_state[:3] = self.vehicle_global_position_data[1:4]
-        current_state[3:6] = self.sensor_combined_data[1:4]
+            current_state[:3] = self.vehicle_global_position_data[1:4]
+            current_state[3:6] = self.sensor_combined_data[1:4]
 
-        BFM = self.compute_body_frame_matrix(current_state[3], current_state[4], current_state[5])
-        R_body = BFM[:3, :3]
+            BFM = self.compute_body_frame_matrix(current_state[3], current_state[4], current_state[5])
+            R_body = BFM[:3, :3]
 
-        self.errors.append(np.zeros(6))
-        self.errors[-1][:3] = np.dot(R_body, self.desired_state[:3] - current_state[:3])
-        d_pos_error = (self.errors[-1][:3] - self.errors[-2][:3]) / self.dt
+            self.errors.append(np.zeros(6))
+            self.errors[-1][:3] = np.dot(R_body, np.array(self.desired_state[:3]) - np.array(current_state[:3]))
+            d_pos_error = (self.errors[-1][:3] - self.errors[-2][:3]) / self.dt
 
-        desired_attitude = np.zeros(3)
+            desired_attitude = np.zeros(3)
 
-        desired_attitude[:2] = self.attitude_controller.update(self.errors[-1][:2], d_pos_error[:2], self.dt)
-        desired_phi = (-1/self.g) * (self.desired_state[7] + desired_attitude[1])
-        desired_theta = (1/self.g) * (self.desired_state[6] + desired_attitude[0])
-        desired_attitude[0], desired_attitude[1]  = desired_phi, desired_theta
-        desired_attitude[2] = self.yaw_controller.update(np.array([0]), np.array([0]), self.dt)[0]
+            desired_attitude[:2] = self.attitude_controller.update(self.errors[-1][:2], d_pos_error[:2], self.dt)
+            desired_phi = (-1/self.g) * (self.desired_state[7] + desired_attitude[1])
+            desired_theta = (1/self.g) * (self.desired_state[6] + desired_attitude[0])
+            desired_attitude[0], desired_attitude[1]  = desired_phi, desired_theta
+            desired_attitude[2] = self.yaw_controller.update(np.array([0]), np.array([0]), self.dt)[0]
 
-        self.errors[-1][3:6] = desired_attitude - np.dot(R_body, current_state[3:6])
-        d_angle_error = (self.errors[-1][3:6] - self.errors[-2][3:6]) / self.dt
+            self.errors[-1][3:6] = desired_attitude - np.dot(R_body, current_state[3:6])
+            d_angle_error = (self.errors[-1][3:6] - self.errors[-2][3:6]) / self.dt
 
-        force = self.force_controller.update(np.array([self.errors[-1][2]]), np.array([d_pos_error[2]]), self.dt)
-        force = self.mass * (self.g + self.desired_state[8] + force) / (np.cos(current_state[3]) * np.cos(current_state[4]))
-        moment = self.moment_controller.update(self.errors[-1][3:6], d_angle_error, self.dt)
+            force = self.force_controller.update(np.array([self.errors[-1][2]]), np.array([d_pos_error[2]]), self.dt)
+            force = self.mass * (self.g + self.desired_state[8] + force) / (np.cos(current_state[3]) * np.cos(current_state[4]))
+            moment = self.moment_controller.update(self.errors[-1][3:6], d_angle_error, self.dt)
 
-        motor_speeds = self.compute_motor_speeds(force[0], moment)
+            motor_speeds = self.compute_motor_speeds(force[0], moment)
 
-        self.throttle_values = motor_speeds
+            self.throttle_values = motor_speeds
 
 def main(args=None):
     rclpy.init(args=args)
