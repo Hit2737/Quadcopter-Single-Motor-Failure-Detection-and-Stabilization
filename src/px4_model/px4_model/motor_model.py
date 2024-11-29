@@ -153,10 +153,14 @@ class ThrottlePublisher(Node):
             current_state[:3] = self.vehicle_global_position_data[1:4]
             current_state[3:6] = self.sensor_combined_data[1:4]
 
+            print(f"Current State: {current_state}")
+
             BFM = self.compute_body_frame_matrix(current_state[3], current_state[4], current_state[5])
             R_body = BFM[:3, :3]
 
             self.errors.append(np.zeros(6))
+            if len(self.errors) > 2:
+                self.erros.pop(0)
             self.errors[-1][:3] = np.dot(R_body, np.array(self.desired_state[:3]) - np.array(current_state[:3]))
             d_pos_error = (self.errors[-1][:3] - self.errors[-2][:3]) / self.dt
 
@@ -176,6 +180,8 @@ class ThrottlePublisher(Node):
             moment = self.moment_controller.update(self.errors[-1][3:6], d_angle_error, self.dt)
 
             motor_speeds = self.compute_motor_speeds(force[0], moment)
+
+            print(f"Errors: {self.errors[-1]}")
 
             self.throttle_values = motor_speeds
 
