@@ -72,10 +72,10 @@ class ThrottlePublisher(Node):
         )
 
         # PID Controllers
-        self.force_controller = PIDController(KP=np.array([10.0]), KD=np.array([6.0]), KI=np.array([0.0]), size=1)
-        self.moment_controller = PIDController(KP=np.array([6.0, 6.0, 6.0]), KD=np.array([3.0, 3.0, 3.0]), KI=np.array([0.0, 0.0, 0.0]), size=3)
-        self.attitude_controller = PIDController(KP=np.array([8.0, 8.0]), KD=np.array([4.0, 4.0]), KI=np.array([0.0, 0.0]), size=2)
-        self.yaw_controller = PIDController(KP=np.array([5.0]), KD=np.array([2.0]), KI=np.array([0.0]), size=1)
+        self.force_controller = PIDController(KP=np.array([0.051]), KD=np.array([2.0]), KI=np.array([0.0]), size=1)
+        self.moment_controller = PIDController(KP=np.array([0.01, 0.01, 0.01]), KD=np.array([0.0, 0.0, 0.0]), KI=np.array([0.0, 0.0, 0.0]), size=3)
+        self.attitude_controller = PIDController(KP=np.array([10.0, 10.0]), KD=np.array([6.0, 6.0]), KI=np.array([0.0, 0.0]), size=2)
+        self.yaw_controller = PIDController(KP=np.array([0.1]), KD=np.array([2.0]), KI=np.array([0.0]), size=1)
 
         # Initialize data storage
         self.sensor_combined_data = None
@@ -87,14 +87,18 @@ class ThrottlePublisher(Node):
         self.create_subscription(SensorGps, '/fmu/out/vehicle_gps_position', self.vehicle_gps_position_callback, qos_profile)
         self.create_subscription(VehicleGlobalPosition, '/fmu/out/vehicle_global_position', self.vehicle_global_position_callback, qos_profile)
 
+        self.base_lat = 47.397742
+        self.base_lon = 8.545594
+        self.base_alt = 488.0
+
         self.throttle_values = [0.0, 0.0, 0.0, 0.0]
-        self.dt = 0.05
+        self.dt = 0.005
         self.publisher_ = self.create_publisher(Float32MultiArray, '/drone/throttle_values', 10)
         self.control_timer = self.create_timer(self.dt, self.update_control_loop)
         self.throttle_timer = self.create_timer(self.dt, self.publish_throttle_values)
 
         # Desired_state = [X, Y, Z, Vx, Vy, Vz, Ax, Ay, Az, Phi, Theta, Psi]
-        self.desired_state = [0.0, 0.0, 500.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.desired_state = [0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self.errors = [np.zeros(6)]
 
         self.mass = 1.5
@@ -125,8 +129,9 @@ class ThrottlePublisher(Node):
     def publish_throttle_values(self):
         msg = Float32MultiArray()
         msg.data = [self.throttle_values[0], self.throttle_values[1], self.throttle_values[2], self.throttle_values[3]]
+        # msg.data = [0.5, 0.5, 0.5, 0.5]
         self.publisher_.publish(msg)
-        # self.get_logger().info(f'Published throttle values: {msg.data}')
+        self.get_logger().info(f'Published throttle values: {msg.data}')
 
     def sensor_combined_callback(self, msg):
         self.sensor_combined_data = [msg.timestamp] + list(msg.gyro_rad) + list(msg.accelerometer_m_s2)
@@ -135,10 +140,10 @@ class ThrottlePublisher(Node):
         self.vehicle_gps_position_data = [msg.timestamp, msg.latitude_deg, msg.longitude_deg, msg.altitude_msl_m, msg.vel_m_s, msg.vel_n_m_s, msg.vel_e_m_s, msg.vel_d_m_s]
     
     def vehicle_global_position_callback(self, msg):
-        self.vehicle_global_position_data = [msg.timestamp, msg.lat, msg.lon, msg.alt]
+        self.vehicle_global_position_data = [msg.timestamp, msg.lat-self.base_lat, msg.lon-self.base_lon, msg.alt-self.base_alt]
 
     def compute_body_frame_matrix(self, phi, theta, psi):
-        return np.dot(R_a3_psi(psi), np.dot(R_a2_theta(theta), R_a1_phi(phi)))
+        return np.dot(R_a3_psi(psi), R_a1_phi(phi), R_a2_theta(theta))
 
     def compute_motor_speeds(self, F, M):
         omega_squared = np.linalg.inv(self.allocation_matrix) @ np.array([F, M[0], M[1], M[2]])
@@ -175,13 +180,17 @@ class ThrottlePublisher(Node):
             self.errors[-1][3:6] = desired_attitude - np.dot(R_body, current_state[3:6])
             d_angle_error = (self.errors[-1][3:6] - self.errors[-2][3:6]) / self.dt
 
-            force = self.force_controller.update(np.array([self.errors[-1][2]]), np.array([d_pos_error[2]]), self.dt)
-            force = self.mass * (self.g + self.desired_state[8] + force) / (np.cos(current_state[3]) * np.cos(current_state[4]))
+            acc = self.force_controller.update(np.array([self.errors[-1][2]]), np.array([d_pos_error[2]]), self.dt)
+            force = self.mass * (self.g + self.desired_state[8] + acc / (np.cos(current_state[3]) * np.cos(current_state[4])))
             moment = self.moment_controller.update(self.errors[-1][3:6], d_angle_error, self.dt)
-
+            print("--------------------")
+            print(f"Desired Attitude: {desired_attitude}, Current Attitude: {np.dot(R_body, current_state[3:6])}")
+            print("====================================")
+            print("Errors: ", self.errors[-1][3:6])
             motor_speeds = self.compute_motor_speeds(force[0], moment)
 
-            print(f"Errors: {self.errors[-1]}")
+            print(f"Force: {force[0]}, Moment: {moment}")
+            # print(f"Errors: {self.errors[-1]}")
 
             self.throttle_values = motor_speeds
 
