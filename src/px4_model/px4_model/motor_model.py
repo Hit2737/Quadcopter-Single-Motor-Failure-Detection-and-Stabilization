@@ -160,7 +160,7 @@ class ThrottlePublisher(Node):
 
             self.errors.append(np.zeros(6))
             if len(self.errors) > 2:
-                self.erros.pop(0)
+                self.errors.pop(0)
             self.errors[-1][:3] = np.dot(R_body, np.array(self.desired_state[:3]) - np.array(current_state[:3]))
             d_pos_error = (self.errors[-1][:3] - self.errors[-2][:3]) / self.dt
 
