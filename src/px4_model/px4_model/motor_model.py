@@ -38,28 +38,29 @@ class ThrottlePublisher(Node):
         )
 
         self.mass = 1.725
-        self.inertia_matrix = np.diag([0.029125, 0.029125, 0.055225])
+        self.inertia_matrix = np.array([0.029125, 0.029125, 0.055225])
         self.gravity = 9.81
         self.arm_length = 0.25
         self.moment_constant = 0.06
         self.thrust_constant = 5.84e-06
         self.max_rotor_speed = 1100.0
+        self.R_B_W = np.eye(3)
 
         self.position = np.zeros(3)
         self.velocity = np.zeros(3)
         self.orientation = np.zeros(3)
         self.angular_velocity = np.zeros(3)
 
-        self.position_r = np.array([0, 0, 0])
+        self.position_r = np.array([0, 0, 2])
         self.velocity_r = np.array([0, 0, 0])
         self.acceleration_r = np.array([0, 0, 0])
         self.yaw_r = 0
         self.yaw_rate_r = 0
 
-        self.position_gain = np.array([0.5, 0.5, 0.5])
-        self.velocity_gain = np.array([0.5, 0.5, 0.5])
-        self.attitude_gain = np.array([0.5, 0.5, 0.5])
-        self.angular_rate_gain = np.array([0.5, 0.5, 0.5])
+        self.position_gain = np.array([7.0, 7.0, 6.0])
+        self.velocity_gain = np.array([6.0, 6.0, 3.0])
+        self.attitude_gain = np.array([3.5, 3.5, 0.3])
+        self.angular_rate_gain = np.array([0.5, 0.5, 0.1])
         self.omega_to_pwn_coefficients = np.array([0.001142, 0.2273, 914.2])
         self.pwm_min = 1075
         self.pwm_max = 1950
@@ -79,6 +80,8 @@ class ThrottlePublisher(Node):
         msg = Float32MultiArray()
         msg.data = [self.throttle_values[0], self.throttle_values[1], self.throttle_values[2], self.throttle_values[3]]
         self.publisher_.publish(msg)
+
+        print("Throttle values: ", self.throttle_values)
 
     def compute_control_allocation_and_actuator_matrices(self):
         k_deg_to_rad = np.pi / 180.0
@@ -120,11 +123,11 @@ class ThrottlePublisher(Node):
         print("throttles_to_normalized_torques_and_thrust_ = \n", self.throttles_to_normalized_torques_and_thrust)
 
     def eigen_odometry_from_px4_msg(self, msg):
-        position_W = rotate_vector_from_to_enu_ned(np.array(msg["position"]))
-        quaternion = R.from_quat([msg["q"][0], msg["q"][1], msg["q"][2], msg["q"][3]])
+        position_W = rotate_vector_from_to_enu_ned(np.array(msg.position))
+        quaternion = R.from_quat([msg.q[1], msg.q[2], msg.q[3], msg.q[0]])
         orientation_B_W = rotate_quaternion_from_to_enu_ned(quaternion)
-        velocity_B = rotate_vector_from_to_enu_ned(np.array(msg["velocity"]))
-        angular_velocity_B = rotate_vector_from_to_frd_flu(np.array(msg["angular_velocity"]))
+        velocity_B = rotate_vector_from_to_enu_ned(np.array(msg.velocity))
+        angular_velocity_B = rotate_vector_from_to_frd_flu(np.array(msg.angular_velocity))
 
         return position_W, orientation_B_W, velocity_B, angular_velocity_B
 
@@ -134,8 +137,8 @@ class ThrottlePublisher(Node):
         self.position = position_W
         self.velocity = self.R_B_W.T @ velocity_B
         self.angular_velocity = angular_velocity_B
-    
-    def calculate_controller_output(self, desired_quaternion):
+
+    def calculate_controller_outputs(self):
         # Compute translational tracking errors
         e_p = self.position - self.position_r
         e_v = self.velocity - self.velocity_r
@@ -160,8 +163,8 @@ class ThrottlePublisher(Node):
         R_d_w[:, 2] = B_z_d
 
         # Compute desired quaternion
-        desired_quaternion_temp = R.from_matrix(R_d_w).as_quat()  # Quaternion as [x, y, z, w]
-        desired_quaternion[:] = desired_quaternion_temp
+        desired_quaternion = R.from_matrix(R_d_w).as_quat()  # Quaternion as [x, y, z, w]
+        desired_quaternion = desired_quaternion
 
         # Attitude tracking
         e_R_matrix = 0.5 * (R_d_w.T @ self.R_B_W - self.R_B_W.T @ R_d_w)
@@ -174,7 +177,7 @@ class ThrottlePublisher(Node):
             - np.multiply(self.angular_rate_gain, e_omega)
             + np.cross(
                 self.angular_velocity,
-                np.dot(np.diag(self.inertia_matrix), self.angular_velocity)
+                (self.inertia_matrix * self.angular_velocity)
             )
         )
 
