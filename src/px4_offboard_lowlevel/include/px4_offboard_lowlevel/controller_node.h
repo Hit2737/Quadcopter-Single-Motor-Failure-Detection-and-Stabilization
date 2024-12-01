@@ -111,6 +111,8 @@ private:
     std::string thrust_setpoint_topic_;
     std::string torque_setpoint_topic_;
     std::string actuator_control_topic_;
+    int failed_motor_ = 2;
+    int motor_failed_ = 1;
 
     // UAV Parameters
     double _arm_length;
@@ -157,8 +159,9 @@ private:
     void publish_vehicle_command(uint16_t command, float param1 =0.0, float param2 = 0.0);   
 
     void compute_ControlAllocation_and_ActuatorEffect_matrices();
+    void Updated_Control_On_Motor_Failure(int failed_motor);
     void px4Inverse (Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
-    void px4InverseSITL (Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
+    void px4InverseSITL (Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, Eigen::VectorXd *wrench);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d& vec_in) {
         // NED (X North, Y East, Z Down) & ENU (X East, Y North, Z Up)
