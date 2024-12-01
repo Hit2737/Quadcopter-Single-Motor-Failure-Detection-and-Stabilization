@@ -367,11 +367,12 @@ void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrus
 
         Eigen::VectorXd omega_temp(4);
         omega_temp.setZero();
-        for (int i = 0; i < 4; i++)
+        for (int i = 0, update_i = 0; i < 4; i++)
         {
             if (i == failed_motor_)
                 continue;
-            omega_temp(i) = omega(i);
+            omega_temp(i) = omega(update_i);
+            update_i++;
         }
         omega.resize(4);
         omega = omega_temp;
