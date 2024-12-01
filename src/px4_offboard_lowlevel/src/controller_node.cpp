@@ -252,21 +252,23 @@ void ControllerNode::compute_ControlAllocation_and_ActuatorEffect_matrices()
 void ControllerNode::Updated_Control_On_Motor_Failure(int failed_motor)
 {
     // removing col from rotor_velocities_to_torques_and_thrust_ based on the failed motor and remove row corresponding to the yaw control
-    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated_;
-    rotor_velocities_to_torques_and_thrust_updated.resize(3, 3);
-    for (int i = 0; i < 3; i++)
-    {
-        for (int j = 0, k = 0; j < 3, k < 4; j++; k++)
-        {
-            if (k == failed_motor)
-                k++;
-            if (i == 2)
-            {
-                rotor_velocities_to_torques_and_thrust_updated_(i, j) = rotor_velocities_to_torques_and_thrust_(3, j);
-            }
-            rotor_velocities_to_torques_and_thrust_updated_(i, j) = rotor_velocities_to_torques_and_thrust_(i, k);
-        }
-    }
+    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust;
+    const double kDegToRad = M_PI / 180.0;
+    const double kS = std::sin(45 * kDegToRad);
+    rotor_velocities_to_torques_and_thrust.resize(3, 4);
+    rotor_velocities_to_torques_and_thrust << -kS, kS, kS, -kS,
+        -kS, kS, -kS, kS,
+        1, 1, 1, 1;
+    Eigen::Vector4d k; // Helper diagonal matrix.
+    k << _thrust_constant * _arm_length,
+        _thrust_constant * _arm_length,
+        _thrust_constant;
+    rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
+
+    // Create updated matrix by removing the column corresponding to the failed motor
+    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(3, 3);
+    rotor_velocities_to_torques_and_thrust_updated << rotor_velocities_to_torques_and_thrust.block(0, 0, 3, failed_motor),
+        rotor_velocities_to_torques_and_thrust.block(0, failed_motor + 1, 3, 4 - failed_motor - 1);
 
     // Recalculate the pseudo-inverse
     Eigen::MatrixXd torques_and_thrust_to_rotor_velocities_updated_;
@@ -278,8 +280,6 @@ void ControllerNode::Updated_Control_On_Motor_Failure(int failed_motor)
 
     // Update the control allocation matrices
     rotor_velocities_to_torques_and_thrust_.resize(3, 3);
-    torques_and_thrust_to_rotor_velocities_.resize(3, 3);
-    torques_and_thrust_to_rotor_velocities_ = torques_and_thrust_to_rotor_velocities_updated_;
     rotor_velocities_to_torques_and_thrust_ = rotor_velocities_to_torques_and_thrust_updated_;
 }
 
@@ -298,38 +298,14 @@ void ControllerNode::px4Inverse(Eigen::Vector4d *normalized_torque_and_thrust, E
         throttles->resize(4);
         throttles->setZero();
         ones_temp.resize(4);
-        ones_temp = Eigen::VectorXd::Ones(4);
+        ones_temp = Eigen::VectorXd::Ones(4, 1);
     }
     else
     {
         std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
     }
     // Control allocation: Wrench to Rotational velocities (omega)
-    if (motor_failed_)
-    {
-        *wrench[2] = *wrench[3];
-        // resize the wrench to 3
-        wrench->conservativeResize(3);
-    }
-    Eigen::VectorXd omega3;
-    omega3.resize(3);
-
-    if (!motor_failed_)
-        omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
-    else
-    {
-        omega3 = torques_and_thrust_to_rotor_velocities_ * (*wrench);
-        for (int i = 0, k = 0; i < 4 && k < 4; i++, k++)
-        {
-            if (k == failed_motor_)
-            {
-                omega[k] = 0.0;
-                k++;
-            }
-            if (k < 4)
-                omega[k] = omega3[i];
-        }
-    }
+    omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
     for (int i = 0; i < omega.size(); i++)
     {
         if (omega[i] <= 0)
@@ -370,9 +346,9 @@ void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrus
     // Control allocation: Wrench to Rotational velocities (omega)
     if (motor_failed_)
     {
-        *wrench[2] = *wrench[3];
-        // resize the wrench to 3
-        wrench->conservativeResize(3);
+        Eigen::VectorXd resized_wrench(3);
+        resized_wrench << (*wrench)[0], (*wrench)[1], (*wrench)[3];
+        *wrench = resized_wrench;
     }
     Eigen::VectorXd omega3;
     omega3.resize(3);

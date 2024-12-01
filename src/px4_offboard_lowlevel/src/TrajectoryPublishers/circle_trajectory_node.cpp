@@ -51,13 +51,14 @@ public:
 
 private:
   void publishCirclePose() {
+    geometry_msgs::msg::PoseStamped pose_stamped;
     pose_stamped.header.stamp = this->now();
     pose_stamped.header.frame_id = "base_link"; // Change this to your desired frame ID
 
-    pose_stamped.pose.position.y = 0.0;
-    pose_stamped.pose.position.z = 1.0;
     pose_stamped.pose.position.x = 0.0;
-    pose_stamped.pose.orientation.w = 0.0;
+    pose_stamped.pose.position.y = 0.0;
+    pose_stamped.pose.position.z = 2.0;
+    pose_stamped.pose.orientation.w = 1.0;
 
     publisher_->publish(pose_stamped);
   }
