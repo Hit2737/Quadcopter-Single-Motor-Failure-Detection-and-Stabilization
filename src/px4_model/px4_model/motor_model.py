@@ -19,7 +19,10 @@ def rotate_quaternion_from_to_enu_ned(quat_in):
     euler_2 = [np.pi, 0.0, 0.0]
     AIRCRAFT_BASELINK_Q = R.from_euler('zyx', euler_2)
 
-    transformed_quat = NED_ENU_Q * quat_in * AIRCRAFT_BASELINK_Q
+    quat_in = np.array(quat_in)
+    input_quat = R.from_quat(quat_in)
+
+    transformed_quat = (NED_ENU_Q * input_quat) * AIRCRAFT_BASELINK_Q
     return transformed_quat
 
 def rotate_vector_from_to_frd_flu(vec_in):
@@ -64,6 +67,7 @@ class ThrottlePublisher(Node):
         self.omega_to_pwn_coefficients = np.array([0.001142, 0.2273, 914.2])
         self.pwm_min = 1075
         self.pwm_max = 1950
+        self.input_scaling = 1000
 
         self.compute_control_allocation_and_actuator_matrices()
 
@@ -124,7 +128,7 @@ class ThrottlePublisher(Node):
 
     def eigen_odometry_from_px4_msg(self, msg):
         position_W = rotate_vector_from_to_enu_ned(np.array(msg.position))
-        quaternion = R.from_quat([msg.q[1], msg.q[2], msg.q[3], msg.q[0]])
+        quaternion = [msg.q[1], msg.q[2], msg.q[3], msg.q[0]]
         orientation_B_W = rotate_quaternion_from_to_enu_ned(quaternion)
         velocity_B = rotate_vector_from_to_enu_ned(np.array(msg.velocity))
         angular_velocity_B = rotate_vector_from_to_frd_flu(np.array(msg.angular_velocity))
@@ -137,6 +141,12 @@ class ThrottlePublisher(Node):
         self.position = position_W
         self.velocity = self.R_B_W.T @ velocity_B
         self.angular_velocity = angular_velocity_B
+
+        if not hasattr(self, 'logged_once'):
+            self.get_logger().info('vehicle_odometry_callback is called')
+            self.logged_once = True
+
+        print(f"Vehicle Odometry: \nPosition: {self.position}\nOrientation: {self.R_B_W}\nVelocity: {self.velocity}\nAngular Velocity: {self.angular_velocity}")
 
     def calculate_controller_outputs(self):
         # Compute translational tracking errors
@@ -190,16 +200,8 @@ class ThrottlePublisher(Node):
     
     def inverse_kinematics(self, wrench):
         omega = self.torques_and_thrust_to_rotor_velocities @ wrench
-        omega = np.sqrt(np.clip(omega, 0, self.max_rotor_speed))
-
-        ones_temp = np.ones(4)
-        pwm = (
-            self.omega_to_pwn_coefficients[0] * omega**2
-            + self.omega_to_pwn_coefficients[1] * omega
-            + self.omega_to_pwn_coefficients[2] * ones_temp
-        )
-
-        throttles = (pwm - self.pwm_min * ones_temp) / (self.pwm_max - self.pwm_min)
+        omega = np.sqrt(np.clip(omega, 0, np.inf))
+        throttles = (omega - 100) / (self.input_scaling)
 
         normalized_throttles = self.throttles_to_normalized_torques_and_thrust @ throttles
         return normalized_throttles, throttles
