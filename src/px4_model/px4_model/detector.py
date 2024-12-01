@@ -66,7 +66,7 @@ class FailureDetector(Node):
 
         # Create a publisher for the failure detection topic
         self.failure_detection_publisher = self.create_publisher(
-            Int32, "/failure_detection", qos_profile
+            Int32, "/detected_failed_motor", qos_profile
         )
 
         # Create a timer to call the prediction function at a regular interval
@@ -91,8 +91,6 @@ class FailureDetector(Node):
                 self.failed_motor = 3
             elif self.gyroXg5 and self.gyroYg3:
                 self.failed_motor = 4
-
-        print("Failed Motor: ", self.failed_motor)
 
     def vehicle_gps_position_callback(self, msg):
         self.vehicle_gps_position_data = [

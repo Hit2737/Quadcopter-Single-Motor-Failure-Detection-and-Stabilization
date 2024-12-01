@@ -37,7 +37,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
-
+#include "std_msgs/msg/int32.hpp"
 #include <px4_msgs/msg/offboard_control_mode.hpp>
 #include <px4_msgs/msg/vehicle_odometry.hpp>
 #include <px4_msgs/msg/vehicle_attitude_setpoint.hpp>
@@ -80,6 +80,7 @@ private:
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_sub_;
     rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr command_pose_sub_;
+    rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr failure_detection_sub_;
 
     // Publishers
     rclcpp::Publisher<px4_msgs::msg::ActuatorMotors>::SharedPtr actuator_motors_publisher_;
@@ -155,7 +156,7 @@ private:
 
     void compute_ControlAllocation_and_ActuatorEffect_matrices();
     void UpdateAllocationMatrix(int failed_motor_);
-    // void Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg);
+    void Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg);
     void px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d &vec_in)
