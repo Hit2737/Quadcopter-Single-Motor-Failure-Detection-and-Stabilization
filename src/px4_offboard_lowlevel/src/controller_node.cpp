@@ -38,8 +38,13 @@ ControllerNode::ControllerNode()
     : Node("controller_node")
 {
     loadParams();
+    RCLCPP_INFO(this->get_logger(), "Controller Node has been started");
     compute_ControlAllocation_and_ActuatorEffect_matrices();
-    Updated_Control_On_Motor_Failure(failed_motor_);
+
+    RCLCPP_INFO(this->get_logger(), "Updation Node has been started");
+    if (failed_motor_)
+        UpdateAllocationMatrix(failed_motor_);
+
     // Defining the compatible ROS 2 predefined QoS for PX4 topics
     rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
     auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 5), qos_profile);
@@ -249,136 +254,136 @@ void ControllerNode::compute_ControlAllocation_and_ActuatorEffect_matrices()
     std::cout << "throttles_to_normalized_torques_and_thrust_ = " << throttles_to_normalized_torques_and_thrust_ << std::endl;
 }
 
-void ControllerNode::Updated_Control_On_Motor_Failure(int failed_motor)
+void ControllerNode::UpdateAllocationMatrix(int failed_motor_)
 {
-    // removing col from rotor_velocities_to_torques_and_thrust_ based on the failed motor and remove row corresponding to the yaw control
-    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust;
     const double kDegToRad = M_PI / 180.0;
-    const double kS = std::sin(45 * kDegToRad);
-    rotor_velocities_to_torques_and_thrust.resize(3, 4);
-    rotor_velocities_to_torques_and_thrust << -kS, kS, kS, -kS,
-        -kS, kS, -kS, kS,
-        1, 1, 1, 1;
+    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust;
+    Eigen::MatrixXd mixing_matrix;
+    if (_num_of_arms == 4)
+    {
+        const double kS = std::sin(45 * kDegToRad);
+        rotor_velocities_to_torques_and_thrust.resize(4, 4);
+        mixing_matrix.resize(4, 4);
+        rotor_velocities_to_torques_and_thrust << -kS, kS, kS, -kS,
+            -kS, kS, -kS, kS,
+            -1, -1, 1, 1,
+            1, 1, 1, 1;
+        mixing_matrix << -0.495384, -0.707107, -0.765306, 1.0,
+            0.495384, 0.707107, -1.0, 1.0,
+            0.495384, -0.707107, 0.765306, 1.0,
+            -0.495384, 0.707107, 1.0, 1.0;
+        torques_and_thrust_to_rotor_velocities_.resize(4, 4);
+        throttles_to_normalized_torques_and_thrust_.resize(4, 4);
+        // Hardcoded because the calculation of pesudo-inverse is not accurate
+        throttles_to_normalized_torques_and_thrust_ << -0.5718, 0.4376, 0.5718, -0.4376,
+            -0.3536, 0.3536, -0.3536, 0.3536,
+            -0.2832, -0.2832, 0.2832, 0.2832,
+            0.2500, 0.2500, 0.2500, 0.2500;
+    }
+    else
+    {
+        std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
+    }
+    // Calculate Control allocation matrix: Wrench to Rotational velocities
     Eigen::Vector4d k; // Helper diagonal matrix.
     k << _thrust_constant * _arm_length,
         _thrust_constant * _arm_length,
+        _moment_constant * _thrust_constant,
         _thrust_constant;
     rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
 
-    // Create updated matrix by removing the column corresponding to the failed motor
-    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated_(3, 3);
-    rotor_velocities_to_torques_and_thrust_updated_ << rotor_velocities_to_torques_and_thrust.block(0, 0, 3, failed_motor),
-        rotor_velocities_to_torques_and_thrust.block(0, failed_motor + 1, 3, 4 - failed_motor - 1);
+    // Update the allocation matrix
+    int update_i = 0;
+    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(3, 3);
+    for (int i = 0; i < 4; i++)
+    {
+        if (i == 2)
+            continue;
 
-    // Recalculate the pseudo-inverse
-    Eigen::MatrixXd torques_and_thrust_to_rotor_velocities_updated_;
-    torques_and_thrust_to_rotor_velocities_updated_.resize(3, 3);
-    torques_and_thrust_to_rotor_velocities_updated_ =
-        rotor_velocities_to_torques_and_thrust_updated_.completeOrthogonalDecomposition().pseudoInverse();
-    std::cout << "rotor_velocities_to_torques_and_thrust_updated_ = " << rotor_velocities_to_torques_and_thrust_updated_ << std::endl;
-    std::cout << "torques_and_thrust_to_rotor_velocities_updated_ = " << torques_and_thrust_to_rotor_velocities_updated_ << std::endl;
+        int update_j = 0;
+        for (int j = 0; j < 4; j++)
+        {
+            if (j == failed_motor_)
+                continue;
 
-    // Update the control allocation matrices
+            rotor_velocities_to_torques_and_thrust_updated(update_i, update_j) = rotor_velocities_to_torques_and_thrust(i, j);
+            ++update_j;
+        }
+        ++update_i;
+    }
+
+    std::cout << "rotor_velocities_to_torques_and_thrust_updated = " << rotor_velocities_to_torques_and_thrust_updated << std::endl;
     torques_and_thrust_to_rotor_velocities_.resize(3, 3);
-    torques_and_thrust_to_rotor_velocities_ = torques_and_thrust_to_rotor_velocities_updated_;
-    std::cout << "torques_and_thrust_to_rotor_velocities_ = " << torques_and_thrust_to_rotor_velocities_ << std::endl;
+    torques_and_thrust_to_rotor_velocities_ =
+        rotor_velocities_to_torques_and_thrust_updated.completeOrthogonalDecomposition().pseudoInverse();
+    std::cout << "torques_and_thrust_to_rotor_velocities = " << torques_and_thrust_to_rotor_velocities_ << std::endl;
 }
 
-void ControllerNode::px4Inverse(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
+void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
 {
+    RCLCPP_INFO(this->get_logger(), "px4InverseSITL");
     Eigen::VectorXd omega;
-    Eigen::VectorXd pwm;
-    Eigen::VectorXd ones_temp;
     normalized_torque_and_thrust->setZero();
-    if (_num_of_arms == 4)
+    Eigen::VectorXd ones_temp;
+    if (_num_of_arms == 6)
+    {
+        omega.resize(6);
+        omega.setZero();
+        throttles->resize(6);
+        throttles->setZero();
+        ones_temp.resize(6);
+        ones_temp = Eigen::VectorXd::Ones(6, 1);
+    }
+    else if (_num_of_arms == 4)
     {
         omega.resize(4);
         omega.setZero();
-        pwm.resize(4);
-        pwm.setZero();
         throttles->resize(4);
         throttles->setZero();
         ones_temp.resize(4);
         ones_temp = Eigen::VectorXd::Ones(4, 1);
     }
-    else
+    else if (_num_of_arms == 44)
     {
-        std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
-    }
-    // Control allocation: Wrench to Rotational velocities (omega)
-    omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
-    for (int i = 0; i < omega.size(); i++)
-    {
-        if (omega[i] <= 0)
-        {
-            omega[i] = 0.0;
-        }
-    }
-    omega = omega.cwiseSqrt();
-    pwm = (_omega_to_pwm_coefficients(0) * omega.cwiseProduct(omega)) + (_omega_to_pwm_coefficients(1) * omega) +
-          (_omega_to_pwm_coefficients(2) * ones_temp);
-    *throttles = (pwm - (_PWM_MIN * ones_temp));
-    *throttles /= (_PWM_MAX - _PWM_MIN);
-    // Inverse Mixing: throttles to normalized torques and thrust
-    *normalized_torque_and_thrust = throttles_to_normalized_torques_and_thrust_ * *throttles;
-}
-
-void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, Eigen::VectorXd *wrench)
-{
-    Eigen::VectorXd omega;
-    Eigen::VectorXd pwm;
-    Eigen::VectorXd ones_temp;
-    normalized_torque_and_thrust->setZero();
-    if (_num_of_arms == 4)
-    {
-        omega.resize(4);
+        omega.resize(8);
         omega.setZero();
-        pwm.resize(4);
-        pwm.setZero();
-        throttles->resize(4);
+        throttles->resize(8);
         throttles->setZero();
-        ones_temp.resize(4);
-        ones_temp = Eigen::VectorXd::Ones(4);
+        ones_temp.resize(8);
+        ones_temp = Eigen::VectorXd::Ones(8, 1);
     }
     else
     {
         std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
     }
     // Control allocation: Wrench to Rotational velocities (omega)
-    if (motor_failed_)
+    Eigen::VectorXd modified_wrench;
+    if (failed_motor_)
     {
-        Eigen::VectorXd resized_wrench(3);
-        resized_wrench << (*wrench)[0], (*wrench)[1], (*wrench)[3];
-        *wrench = resized_wrench;
-    }
-    Eigen::VectorXd omega3;
-    omega3.resize(3);
+        modified_wrench.resize(3);
+        modified_wrench << (*wrench)(0), (*wrench)(1), (*wrench)(3);
+        omega.resize(3);
+        omega = torques_and_thrust_to_rotor_velocities_ * (modified_wrench);
 
-    if (!motor_failed_)
-        omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
+        Eigen::VectorXd omega_temp(4);
+        omega_temp.setZero();
+        for (int i = 0; i < 4; i++)
+        {
+            if (i == failed_motor_)
+                continue;
+            omega_temp(i) = omega(i);
+        }
+        omega.resize(4);
+        omega = omega_temp;
+    }
     else
     {
-        omega3 = torques_and_thrust_to_rotor_velocities_ * (*wrench);
-        for (int i = 0, k = 0; i < 4 && k < 4; i++, k++)
-        {
-            if (k == failed_motor_)
-            {
-                omega[k] = 0.0;
-                k++;
-            }
-            if (k < 4)
-                omega[k] = omega3[i];
-        }
+        // print sizes of the vectors
+        // RCLCPP_INFO(this->get_logger(), "wrench size: %d", wrench->size());
+        // RCLCPP_INFO(this->get_logger(), "torques_and_thrust_to_rotor_velocities_ size: %ld", torques_and_thrust_to_rotor_velocities_.cols());
+        omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
     }
-    for (int i = 0; i < omega.size(); i++)
-    {
-        if (omega[i] <= 0)
-        {
-            omega[i] = 0.0;
-        }
-    }
-    // Control allocation: Wrench to Rotational velocities (omega)
-    omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
+
     omega = omega.cwiseSqrt();
     *throttles = (omega - (_zero_position_armed * ones_temp));
     *throttles /= (_input_scaling);
@@ -597,10 +602,7 @@ void ControllerNode::updateControllerOutput()
     // Normalize the controller output
     Eigen::Vector4d normalized_torque_thrust;
     Eigen::VectorXd throttles;
-    if (in_sitl_mode_)
-        px4InverseSITL(&normalized_torque_thrust, &throttles, &controller_output);
-    else
-        px4Inverse(&normalized_torque_thrust, &throttles, &controller_output);
+    px4InverseSITL(&normalized_torque_thrust, &throttles, &controller_output);
 
     // Publish the controller output
     if (current_status_.nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD)
