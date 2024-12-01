@@ -492,6 +492,17 @@ void ControllerNode::vehicle_odometryCallback(const px4_msgs::msg::VehicleOdomet
                             position, orientation, velocity, angular_velocity);
 
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
+
+    // if the vehicle is at z = 3 then fail the motor 1
+    if (position[2] > 10.0 && failed_motor_ == 0)
+    {
+        failed_motor_ = 2;
+        UpdateAllocationMatrix(failed_motor_);
+    }
+    if (position[2] <= 0.0 && failed_motor_ == 2)
+    {
+        exit(0);
+    }
 }
 
 void ControllerNode::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg)

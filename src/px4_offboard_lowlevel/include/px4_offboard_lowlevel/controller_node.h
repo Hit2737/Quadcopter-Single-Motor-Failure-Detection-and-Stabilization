@@ -110,7 +110,7 @@ private:
     std::string thrust_setpoint_topic_;
     std::string torque_setpoint_topic_;
     std::string actuator_control_topic_;
-    int failed_motor_ = 1;
+    int failed_motor_ = 0;
 
     // UAV Parameters
     double _arm_length;
