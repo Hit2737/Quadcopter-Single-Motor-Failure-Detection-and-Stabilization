@@ -80,7 +80,7 @@ rcl_interfaces::msg::SetParametersResult ControllerNode::parametersCallback(cons
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
     result.reason = "success";
-    // print info about the changed parameter
+
     for (const auto &param : paramfailure_detection_publishereters)
     {
         RCLCPP_INFO(this->get_logger(), "Parameter %s has changed to [%s]", param.get_name().c_str(), param.value_to_string().c_str());
@@ -198,7 +198,6 @@ void ControllerNode::loadParams()
         this->get_parameter("control_gains.K_w_y").as_double(),
         this->get_parameter("control_gains.K_w_z").as_double();
 
-    // pass the UAV Parameters and controller gains to the controller
     controller_.setUavMass(_uav_mass);
     controller_.setInertiaMatrix(_inertia_matrix);
     controller_.setGravity(_gravity);
@@ -213,22 +212,27 @@ void ControllerNode::compute_ControlAllocation_and_ActuatorEffect_matrices()
     const double kDegToRad = M_PI / 180.0;
     Eigen::MatrixXd rotor_velocities_to_torques_and_thrust;
     Eigen::MatrixXd mixing_matrix;
+
     if (_num_of_arms == 4)
     {
         const double kS = std::sin(45 * kDegToRad);
+
         rotor_velocities_to_torques_and_thrust.resize(4, 4);
         mixing_matrix.resize(4, 4);
+
         rotor_velocities_to_torques_and_thrust << -kS, kS, kS, -kS,
             -kS, kS, -kS, kS,
             -1, -1, 1, 1,
             1, 1, 1, 1;
+
         mixing_matrix << -0.495384, -0.707107, -0.765306, 1.0,
             0.495384, 0.707107, -1.0, 1.0,
             0.495384, -0.707107, 0.765306, 1.0,
             -0.495384, 0.707107, 1.0, 1.0;
+
         torques_and_thrust_to_rotor_velocities_.resize(4, 4);
         throttles_to_normalized_torques_and_thrust_.resize(4, 4);
-        // Hardcoded because the calculation of pesudo-inverse is not accurate
+
         throttles_to_normalized_torques_and_thrust_ << -0.5718, 0.4376, 0.5718, -0.4376,
             -0.3536, 0.3536, -0.3536, 0.3536,
             -0.2832, -0.2832, 0.2832, 0.2832,
@@ -238,17 +242,21 @@ void ControllerNode::compute_ControlAllocation_and_ActuatorEffect_matrices()
     {
         std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
     }
-    // Calculate Control allocation matrix: Wrench to Rotational velocities
-    Eigen::Vector4d k; // Helper diagonal matrix.
+
+    Eigen::Vector4d k;
     k << _thrust_constant * _arm_length,
         _thrust_constant * _arm_length,
         _moment_constant * _thrust_constant,
         _thrust_constant;
+
     rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
+
     std::cout << "rotor_velocities_to_torques_and_thrust = " << rotor_velocities_to_torques_and_thrust << std::endl;
+
     torques_and_thrust_to_rotor_velocities_.setZero();
     torques_and_thrust_to_rotor_velocities_ =
         rotor_velocities_to_torques_and_thrust.completeOrthogonalDecomposition().pseudoInverse();
+
     std::cout << "rotor_velocities_to_torques_and_thrust = " << rotor_velocities_to_torques_and_thrust << std::endl;
     std::cout << "torques_and_thrust_to_rotor_velocities = " << torques_and_thrust_to_rotor_velocities_ << std::endl;
     std::cout << "throttles_to_normalized_torques_and_thrust_ = " << throttles_to_normalized_torques_and_thrust_ << std::endl;
@@ -264,17 +272,20 @@ void ControllerNode::UpdateAllocationMatrix(int failed_motor_)
         const double kS = std::sin(45 * kDegToRad);
         rotor_velocities_to_torques_and_thrust.resize(4, 4);
         mixing_matrix.resize(4, 4);
+
         rotor_velocities_to_torques_and_thrust << -kS, kS, kS, -kS,
             -kS, kS, -kS, kS,
             -1, -1, 1, 1,
             1, 1, 1, 1;
+
         mixing_matrix << -0.495384, -0.707107, -0.765306, 1.0,
             0.495384, 0.707107, -1.0, 1.0,
             0.495384, -0.707107, 0.765306, 1.0,
             -0.495384, 0.707107, 1.0, 1.0;
+
         torques_and_thrust_to_rotor_velocities_.resize(4, 4);
         throttles_to_normalized_torques_and_thrust_.resize(4, 4);
-        // Hardcoded because the calculation of pesudo-inverse is not accurate
+
         throttles_to_normalized_torques_and_thrust_ << -0.5718, 0.4376, 0.5718, -0.4376,
             -0.3536, 0.3536, -0.3536, 0.3536,
             -0.2832, -0.2832, 0.2832, 0.2832,
@@ -284,17 +295,17 @@ void ControllerNode::UpdateAllocationMatrix(int failed_motor_)
     {
         std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
     }
-    // Calculate Control allocation matrix: Wrench to Rotational velocities
-    Eigen::Vector4d k; // Helper diagonal matrix.
+
+    Eigen::Vector4d k;
     k << _thrust_constant * _arm_length,
         _thrust_constant * _arm_length,
         _moment_constant * _thrust_constant,
         _thrust_constant;
     rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
 
-    // Update the allocation matrix
-    int update_i = 0;
     Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(3, 3);
+
+    int update_i = 0;
     for (int i = 0; i < 4; i++)
     {
         if (i == 2)
@@ -365,25 +376,24 @@ void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrus
     {
         std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
     }
+
     Eigen::VectorXd modified_wrench;
     if (failed_motor_)
     {
         modified_wrench.resize(3);
         modified_wrench << (*wrench)(0), (*wrench)(1), (*wrench)(3);
-        omega.resize(3);
-        omega = torques_and_thrust_to_rotor_velocities_ * (modified_wrench);
 
-        Eigen::VectorXd omega_temp(4);
-        omega_temp.setZero();
+        Eigen::VectorXd omega_temp(3);
+        omega.setZero();
+        omega_temp = torques_and_thrust_to_rotor_velocities_ * (modified_wrench);
+
         for (int i = 0, update_i = 0; i < 4; i++)
         {
             if (i == failed_motor_)
                 continue;
-            omega_temp(i) = omega(update_i);
+            omega(i) = omega_temp(update_i);
             update_i++;
         }
-        omega.resize(4);
-        omega = omega_temp;
     }
     else
     {
@@ -393,8 +403,7 @@ void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrus
     omega = omega.cwiseSqrt();
     *throttles = (omega - (_zero_position_armed * ones_temp));
     *throttles /= (_input_scaling);
-    // Inverse Mixing: throttles to normalized torques and thrust
-    *normalized_torque_and_thrust = throttles_to_normalized_torques_and_thrust_ * *throttles;
+    *normalized_torque_and_thrust = throttles_to_normalized_torques_and_thrust_ * (*throttles);
 }
 
 void ControllerNode::arm()
@@ -406,7 +415,6 @@ void ControllerNode::arm()
 void ControllerNode::disarm()
 {
     publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0);
-
     RCLCPP_INFO(this->get_logger(), "Disarm command send");
 }
 
@@ -432,29 +440,11 @@ void ControllerNode::publishOffboardControlModeMsg()
     offboard_msg.velocity = false;
     offboard_msg.acceleration = false;
     offboard_msg.body_rate = false;
-    switch (control_mode_)
-    {
-    case 1:
-        offboard_msg.attitude = true;
-        offboard_msg.thrust_and_torque = false;
-        offboard_msg.direct_actuator = false;
-        break;
-    case 2:
-        offboard_msg.attitude = false;
-        offboard_msg.thrust_and_torque = true;
-        offboard_msg.direct_actuator = false;
-        break;
-    case 3:
-        offboard_msg.attitude = false;
-        offboard_msg.thrust_and_torque = false;
-        offboard_msg.direct_actuator = true;
-        break;
-    default:
-        offboard_msg.attitude = true;
-        offboard_msg.thrust_and_torque = false;
-        offboard_msg.direct_actuator = false;
-        break;
-    }
+
+    offboard_msg.attitude = false;
+    offboard_msg.thrust_and_torque = false;
+    offboard_msg.direct_actuator = true;
+
     offboard_msg.timestamp = this->get_clock()->now().nanoseconds() / 1000;
     offboard_control_mode_publisher_->publish(offboard_msg);
     RCLCPP_INFO_ONCE(get_logger(), "Offboard enabled");
@@ -468,19 +458,6 @@ void ControllerNode::commandPoseCallback(const geometry_msgs::msg::PoseStamped::
     eigenTrajectoryPointFromPoseMsg(pose_msg, position, orientation);
     RCLCPP_INFO_ONCE(get_logger(), "Controller got first command message.");
     controller_.setTrajectoryPoint(position, orientation); // Send the command to controller_ obj
-}
-
-void ControllerNode::commandTrajectoryCallback(const trajectory_msgs::msg::MultiDOFJointTrajectoryPoint::SharedPtr &traj_msg)
-{ // When a command is received
-    // initialize vectors
-    Eigen::Vector3d position;
-    Eigen::Vector3d velocity;
-    Eigen::Quaterniond orientation;
-    Eigen::Vector3d angular_velocity;
-    Eigen::Vector3d acceleration;
-    eigenTrajectoryPointFromMsg(traj_msg, position, orientation, velocity, angular_velocity, acceleration);
-    controller_.setTrajectoryPoint(position, velocity, acceleration, orientation, angular_velocity);
-    RCLCPP_INFO_ONCE(get_logger(), "Controller got first command message.");
 }
 
 void ControllerNode::vehicle_odometryCallback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg)
@@ -498,10 +475,9 @@ void ControllerNode::vehicle_odometryCallback(const px4_msgs::msg::VehicleOdomet
 
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
 
-    // if the vehicle is at z = 3 then fail the motor 1
     if (position[2] > 10.0 && failed_motor_ == 0)
     {
-        failed_motor_ = 1;
+        failed_motor_ = 2;
         UpdateAllocationMatrix(failed_motor_);
     }
     if (position[2] <= 0.0 && failed_motor_ == 2)
@@ -520,7 +496,6 @@ void ControllerNode::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::S
     else
     {
         RCLCPP_INFO(get_logger(), "NOT ARMED - vehicle_status_msg.");
-        // publish vehicle command to arm the vehicle
         arm();
     }
     if (current_status_.nav_state == 14)
@@ -530,7 +505,6 @@ void ControllerNode::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::S
     else
     {
         RCLCPP_INFO(get_logger(), "NOT OFFBOARD - vehicle_status_msg.");
-        // publish vehicle command to set offboard mode
         publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1.0, 6.0);
     }
 }
@@ -551,64 +525,6 @@ void ControllerNode::publishActuatorMotorsMsg(const Eigen::VectorXd &throttles)
     actuator_motors_publisher_->publish(actuator_motors_msg);
 }
 
-void ControllerNode::publishThrustTorqueMsg(const Eigen::Vector4d &controller_output)
-{
-    // Lockstep should be disabled from PX4 and from the model.sdf file
-    // Prepare msgs
-    px4_msgs::msg::VehicleThrustSetpoint thrust_sp_msg;
-    px4_msgs::msg::VehicleTorqueSetpoint torque_sp_msg;
-    thrust_sp_msg.timestamp_sample = this->get_clock()->now().nanoseconds() / 1000;
-    torque_sp_msg.timestamp_sample = thrust_sp_msg.timestamp_sample;
-    thrust_sp_msg.timestamp = thrust_sp_msg.timestamp_sample;
-    torque_sp_msg.timestamp = thrust_sp_msg.timestamp_sample;
-    // Fill thrust setpoint msg
-    thrust_sp_msg.xyz[0] = 0.0;
-    thrust_sp_msg.xyz[1] = 0.0;
-    if (controller_output[3] > 0.1)
-    {
-        thrust_sp_msg.xyz[2] = -controller_output[3]; // DO NOT FORGET THE MINUS SIGN (body NED frame)
-    }
-    else
-    {
-        thrust_sp_msg.xyz[2] = -0.1;
-    }
-    // Rotate torque setpoints from FLU to FRD and fill the msg
-    Eigen::Vector3d rotated_torque_sp;
-    rotated_torque_sp = rotateVectorFromToFRD_FLU(Eigen::Vector3d(controller_output[0], controller_output[1], controller_output[2]));
-    torque_sp_msg.xyz[0] = rotated_torque_sp[0];
-    torque_sp_msg.xyz[1] = rotated_torque_sp[1];
-    torque_sp_msg.xyz[2] = rotated_torque_sp[2];
-
-    // Publish msgs
-    thrust_setpoint_publisher_->publish(thrust_sp_msg);
-    torque_setpoint_publisher_->publish(torque_sp_msg);
-}
-
-void ControllerNode::publishAttitudeSetpointMsg(const Eigen::Vector4d &controller_output, const Eigen::Quaterniond &desired_quaternion)
-{
-    // Prepare AttitudeSetpoint msg;
-    attitude_setpoint_msg.timestamp = this->get_clock()->now().nanoseconds() / 1000;
-    Eigen::Quaterniond rotated_quat;
-    rotated_quat = rotateQuaternionFromToENU_NED(desired_quaternion);
-    attitude_setpoint_msg.q_d[0] = rotated_quat.w();
-    attitude_setpoint_msg.q_d[1] = rotated_quat.x();
-    attitude_setpoint_msg.q_d[2] = rotated_quat.y();
-    attitude_setpoint_msg.q_d[3] = rotated_quat.z();
-
-    if (controller_output[3] > 0.1)
-    {
-        attitude_setpoint_msg.thrust_body[0] = 0.0;
-        attitude_setpoint_msg.thrust_body[1] = 0.0;
-        attitude_setpoint_msg.thrust_body[2] = -controller_output[3]; // DO NOT FORGET THE MINUS SIGN (body NED frame)
-    }
-    else
-    {
-        attitude_setpoint_msg.thrust_body[2] = -0.1;
-    }
-
-    attitude_setpoint_publisher_->publish(attitude_setpoint_msg);
-}
-
 void ControllerNode::updateControllerOutput()
 {
     //  calculate controller output
@@ -624,31 +540,14 @@ void ControllerNode::updateControllerOutput()
     // Publish the controller output
     if (current_status_.nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD)
     {
-        switch (control_mode_)
-        {
-        case 1:
-            publishAttitudeSetpointMsg(normalized_torque_thrust, desired_quaternion);
-            break;
-        case 2:
-            publishThrustTorqueMsg(normalized_torque_thrust);
-            break;
-        case 3:
-            publishActuatorMotorsMsg(throttles);
-            break;
-        default:
-            publishAttitudeSetpointMsg(normalized_torque_thrust, desired_quaternion);
-            break;
-        }
+        publishActuatorMotorsMsg(throttles);
     }
 }
 
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-
     rclcpp::spin(std::make_shared<ControllerNode>());
-
     rclcpp::shutdown();
-
     return 0;
 }
