@@ -31,8 +31,12 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
-
 #include "px4_offboard_lowlevel/controller_node.h"
+#include <atomic>
+#include <rclcpp/rclcpp.hpp>
+#include <rcl_interfaces/msg/set_parameters_result.hpp>
+
+std::atomic<int> failed_motor_{0};
 
 ControllerNode::ControllerNode()
     : Node("controller_node")
@@ -40,10 +44,6 @@ ControllerNode::ControllerNode()
     loadParams();
     RCLCPP_INFO(this->get_logger(), "Controller Node has been started");
     compute_ControlAllocation_and_ActuatorEffect_matrices();
-
-    RCLCPP_INFO(this->get_logger(), "Updation Node has been started");
-    if (failed_motor_)
-        UpdateAllocationMatrix(failed_motor_);
 
     // Defining the compatible ROS 2 predefined QoS for PX4 topics
     rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
@@ -53,14 +53,11 @@ ControllerNode::ControllerNode()
     vehicle_odometry_sub_ = this->create_subscription<px4_msgs::msg::VehicleOdometry>(odometry_topic_, qos, std::bind(&ControllerNode::vehicle_odometryCallback, this, _1));
     vehicle_status_sub_ = this->create_subscription<px4_msgs::msg::VehicleStatus>(status_topic_, qos, std::bind(&ControllerNode::vehicleStatusCallback, this, _1));
     command_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(command_pose_topic_, 10, std::bind(&ControllerNode::commandPoseCallback, this, _1));
-    failure_detection_sub_ = this->create_subscription<std_msgs::msg::Int32>("/failure_detection", 10, std::bind(&ControllerNode::Control_On_Motor_Failure, this, _1));
+    // failure_detection_sub_ = this->create_subscription<std_msgs::msg>
     // Publishers
-    attitude_setpoint_publisher_ = this->create_publisher<px4_msgs::msg::VehicleAttitudeSetpoint>(attitude_setpoint_topic_, 10);
     actuator_motors_publisher_ = this->create_publisher<px4_msgs::msg::ActuatorMotors>(actuator_control_topic_, 10);
     offboard_control_mode_publisher_ = this->create_publisher<px4_msgs::msg::OffboardControlMode>(offboard_control_topic_, 10);
     vehicle_command_publisher_ = this->create_publisher<px4_msgs::msg::VehicleCommand>(vehicle_command_topic_, 10);
-    thrust_setpoint_publisher_ = this->create_publisher<px4_msgs::msg::VehicleThrustSetpoint>(thrust_setpoint_topic_, 10);
-    torque_setpoint_publisher_ = this->create_publisher<px4_msgs::msg::VehicleTorqueSetpoint>(torque_setpoint_topic_, 10);
 
     // Parameters subscriber
     callback_handle_ = this->add_on_set_parameters_callback(
@@ -81,12 +78,15 @@ rcl_interfaces::msg::SetParametersResult ControllerNode::parametersCallback(cons
     result.successful = true;
     result.reason = "success";
 
-    for (const auto &param : paramfailure_detection_publishereters)
+    for (const auto &param : parameters)
     {
-        RCLCPP_INFO(this->get_logger(), "Parameter %s has changed to [%s]", param.get_name().c_str(), param.value_to_string().c_str());
-        if (param.get_name() == "control_mode")
+        if (param.get_name() == "failed_motor")
         {
-            control_mode_ = param.as_int();
+            int new_value = param.as_int();
+            failed_motor_.store(new_value);
+            RCLCPP_INFO(this->get_logger(), "Updated failed_motor to [%d]", new_value);
+
+            UpdateAllocationMatrix(new_value); // ********************************** Here we have to change the new_value to the detected failed motor from the detector
         }
     }
     return result;
@@ -95,6 +95,7 @@ rcl_interfaces::msg::SetParametersResult ControllerNode::parametersCallback(cons
 void ControllerNode::loadParams()
 {
     // UAV Parameters
+    this->declare_parameter("failed_motor", 0);
     this->declare_parameter("uav_parameters.mass", 0.0);
     this->declare_parameter("uav_parameters.arm_length", 0.0);
     this->declare_parameter("uav_parameters.num_of_arms", 4);
@@ -160,6 +161,7 @@ void ControllerNode::loadParams()
     thrust_setpoint_topic_ = this->get_parameter("topics_names.thrust_setpoints_topic").as_string();
     torque_setpoint_topic_ = this->get_parameter("topics_names.torque_setpoints_topic").as_string();
     actuator_control_topic_ = this->get_parameter("topics_names.actuator_control_topic").as_string();
+    failed_motor_.store(this->get_parameter("failed_motor").as_int());
 
     // Load logic switches
     this->declare_parameter("sitl_mode", true);
@@ -330,15 +332,6 @@ void ControllerNode::UpdateAllocationMatrix(int failed_motor_)
     std::cout << "torques_and_thrust_to_rotor_velocities = " << torques_and_thrust_to_rotor_velocities_ << std::endl;
 }
 
-void ControllerNode::Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg)
-{
-    failed_motor_ = msg->data;
-    if (failed_motor_)
-    {
-        UpdateAllocationMatrix(failed_motor_);
-    }
-}
-
 void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
 {
     RCLCPP_INFO(this->get_logger(), "px4InverseSITL");
@@ -474,16 +467,6 @@ void ControllerNode::vehicle_odometryCallback(const px4_msgs::msg::VehicleOdomet
                             position, orientation, velocity, angular_velocity);
 
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
-
-    if (position[2] > 10.0 && failed_motor_ == 0)
-    {
-        failed_motor_ = 2;
-        UpdateAllocationMatrix(failed_motor_);
-    }
-    if (position[2] <= 0.0 && failed_motor_ == 2)
-    {
-        exit(0);
-    }
 }
 
 void ControllerNode::vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg)

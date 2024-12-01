@@ -110,7 +110,7 @@ private:
     std::string thrust_setpoint_topic_;
     std::string torque_setpoint_topic_;
     std::string actuator_control_topic_;
-    int failed_motor_ = 0;
+    // int failed_motor_ = 0;
 
     // UAV Parameters
     double _arm_length;
@@ -140,25 +140,22 @@ private:
     bool connected_ = false;
 
     void loadParams();
-    void secureConnection();
+    // void secureConnection();
     void arm();
     void disarm();
 
     // CallBacks
     void commandPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
-    void commandTrajectoryCallback(const trajectory_msgs::msg::MultiDOFJointTrajectoryPoint::SharedPtr &traj_msg);
     void vehicle_odometryCallback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg);
     void vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg);
 
     void publishActuatorMotorsMsg(const Eigen::VectorXd &throttles);
-    void publishThrustTorqueMsg(const Eigen::Vector4d &controller_output);
-    void publishAttitudeSetpointMsg(const Eigen::Vector4d &controller_output, const Eigen::Quaterniond &desired_quaternion);
     void publishOffboardControlModeMsg();
     void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
 
     void compute_ControlAllocation_and_ActuatorEffect_matrices();
     void UpdateAllocationMatrix(int failed_motor_);
-    void Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg);
+    // void Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg);
     void px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d &vec_in)
