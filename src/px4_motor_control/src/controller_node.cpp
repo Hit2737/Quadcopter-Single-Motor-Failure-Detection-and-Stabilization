@@ -80,7 +80,7 @@ ControllerNode::ControllerNode()
 
         // Timers
         std::chrono::duration<double> offboard_period(0.33);        
-        std::chrono::duration<double> controller_period(0.001);        
+        std::chrono::duration<double> controller_period(0.01);        
         offboardTimer = this->create_wall_timer(offboard_period, [=]() {offboard_control_mode_publisher();});
         controllerTimer = this->create_wall_timer(controller_period, [=]() {update_controller_output();});
     }
