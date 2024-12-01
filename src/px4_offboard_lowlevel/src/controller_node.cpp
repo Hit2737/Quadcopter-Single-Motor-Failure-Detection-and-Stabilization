@@ -266,8 +266,8 @@ void ControllerNode::Updated_Control_On_Motor_Failure(int failed_motor)
     rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
 
     // Create updated matrix by removing the column corresponding to the failed motor
-    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(3, 3);
-    rotor_velocities_to_torques_and_thrust_updated << rotor_velocities_to_torques_and_thrust.block(0, 0, 3, failed_motor),
+    Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated_(3, 3);
+    rotor_velocities_to_torques_and_thrust_updated_ << rotor_velocities_to_torques_and_thrust.block(0, 0, 3, failed_motor),
         rotor_velocities_to_torques_and_thrust.block(0, failed_motor + 1, 3, 4 - failed_motor - 1);
 
     // Recalculate the pseudo-inverse
@@ -279,8 +279,9 @@ void ControllerNode::Updated_Control_On_Motor_Failure(int failed_motor)
     std::cout << "torques_and_thrust_to_rotor_velocities_updated_ = " << torques_and_thrust_to_rotor_velocities_updated_ << std::endl;
 
     // Update the control allocation matrices
-    rotor_velocities_to_torques_and_thrust_.resize(3, 3);
-    rotor_velocities_to_torques_and_thrust_ = rotor_velocities_to_torques_and_thrust_updated_;
+    torques_and_thrust_to_rotor_velocities_.resize(3, 3);
+    torques_and_thrust_to_rotor_velocities_ = torques_and_thrust_to_rotor_velocities_updated_;
+    std::cout << "torques_and_thrust_to_rotor_velocities_ = " << torques_and_thrust_to_rotor_velocities_ << std::endl;
 }
 
 void ControllerNode::px4Inverse(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
