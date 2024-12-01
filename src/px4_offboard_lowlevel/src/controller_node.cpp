@@ -53,7 +53,7 @@ ControllerNode::ControllerNode()
     vehicle_odometry_sub_ = this->create_subscription<px4_msgs::msg::VehicleOdometry>(odometry_topic_, qos, std::bind(&ControllerNode::vehicle_odometryCallback, this, _1));
     vehicle_status_sub_ = this->create_subscription<px4_msgs::msg::VehicleStatus>(status_topic_, qos, std::bind(&ControllerNode::vehicleStatusCallback, this, _1));
     command_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(command_pose_topic_, 10, std::bind(&ControllerNode::commandPoseCallback, this, _1));
-
+    failure_detection_sub_ = this->create_subscription<std_msgs::msg::Int32>("/failure_detection", 10, std::bind(&ControllerNode::Control_On_Motor_Failure, this, _1));
     // Publishers
     attitude_setpoint_publisher_ = this->create_publisher<px4_msgs::msg::VehicleAttitudeSetpoint>(attitude_setpoint_topic_, 10);
     actuator_motors_publisher_ = this->create_publisher<px4_msgs::msg::ActuatorMotors>(actuator_control_topic_, 10);
@@ -81,7 +81,7 @@ rcl_interfaces::msg::SetParametersResult ControllerNode::parametersCallback(cons
     result.successful = true;
     result.reason = "success";
     // print info about the changed parameter
-    for (const auto &param : parameters)
+    for (const auto &param : paramfailure_detection_publishereters)
     {
         RCLCPP_INFO(this->get_logger(), "Parameter %s has changed to [%s]", param.get_name().c_str(), param.value_to_string().c_str());
         if (param.get_name() == "control_mode")
@@ -319,6 +319,15 @@ void ControllerNode::UpdateAllocationMatrix(int failed_motor_)
     std::cout << "torques_and_thrust_to_rotor_velocities = " << torques_and_thrust_to_rotor_velocities_ << std::endl;
 }
 
+void ControllerNode::Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg)
+{
+    failed_motor_ = msg->data;
+    if (failed_motor_)
+    {
+        UpdateAllocationMatrix(failed_motor_);
+    }
+}
+
 void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
 {
     RCLCPP_INFO(this->get_logger(), "px4InverseSITL");
@@ -356,7 +365,6 @@ void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrus
     {
         std::cout << ("[controller] Unknown UAV parameter num_of_arms. Cannot calculate control matrices\n");
     }
-    // Control allocation: Wrench to Rotational velocities (omega)
     Eigen::VectorXd modified_wrench;
     if (failed_motor_)
     {
@@ -379,9 +387,6 @@ void ControllerNode::px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrus
     }
     else
     {
-        // print sizes of the vectors
-        // RCLCPP_INFO(this->get_logger(), "wrench size: %d", wrench->size());
-        // RCLCPP_INFO(this->get_logger(), "torques_and_thrust_to_rotor_velocities_ size: %ld", torques_and_thrust_to_rotor_velocities_.cols());
         omega = torques_and_thrust_to_rotor_velocities_ * (*wrench);
     }
 
@@ -496,7 +501,7 @@ void ControllerNode::vehicle_odometryCallback(const px4_msgs::msg::VehicleOdomet
     // if the vehicle is at z = 3 then fail the motor 1
     if (position[2] > 10.0 && failed_motor_ == 0)
     {
-        failed_motor_ = 2;
+        failed_motor_ = 1;
         UpdateAllocationMatrix(failed_motor_);
     }
     if (position[2] <= 0.0 && failed_motor_ == 2)

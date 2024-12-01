@@ -158,8 +158,7 @@ private:
 
     void compute_ControlAllocation_and_ActuatorEffect_matrices();
     void UpdateAllocationMatrix(int failed_motor_);
-    void Updated_Control_On_Motor_Failure(int failed_motor_);
-    void px4Inverse(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
+    void Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg);
     void px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d &vec_in)
