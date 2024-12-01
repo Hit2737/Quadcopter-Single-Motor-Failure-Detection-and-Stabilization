@@ -2,7 +2,7 @@
   ros__parameters:
     sitl_mode: true
     # Control Mode 1: Thrust + Attitude Setpoints 2: Thrust & Torque Setpoints 3: Actuator Control
-    control_mode: 1
+    control_mode: 3
     topics_names:
       command_pose_topic: "command/pose"
       command_traj_topic: "command/trajectory"
