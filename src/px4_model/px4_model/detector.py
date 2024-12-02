@@ -1,16 +1,8 @@
-import os
-import sys
-
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from px4_msgs.msg import SensorCombined, VehicleGlobalPosition, SensorGps
 from std_msgs.msg import Int32
-
-# from tensorflow.keras.models import load_model
-
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 
 class FailureDetector(Node):
     def __init__(self, frequency=100):
@@ -19,10 +11,6 @@ class FailureDetector(Node):
         # Parameters
         self.frequency = frequency
         self.input_data = []
-
-        # Initialize the model
-        # self.model = load_model(file_path)
-        # self.sequence_length = self.model.input_shape[1]
 
         self.gyroXg5 = False
         self.gyroYg3 = False

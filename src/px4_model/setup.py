@@ -27,8 +27,6 @@ setup(
     license='Apache License 2.0',
     entry_points={
         'console_scripts': [
-            'motor_model = px4_model.motor_model:main',
-            'collector = px4_model.collector:main',
             'detector = px4_model.detector:main',
         ],
     },

@@ -53,7 +53,7 @@
 #include <trajectory_msgs/msg/multi_dof_joint_trajectory_point.hpp>
 
 #include <string>
-
+#include <atomic>
 #include "px4_offboard_lowlevel/controller.h"
 
 #include <chrono>
@@ -66,7 +66,7 @@ class ControllerNode : public rclcpp::Node
 public:
     ControllerNode();
     // virtual ~controller_node();
-    void updateControllerOutput();
+    void update_control_loop();
 
 private:
     controller controller_;
@@ -91,7 +91,7 @@ private:
     rclcpp::Publisher<px4_msgs::msg::VehicleCommand>::SharedPtr vehicle_command_publisher_;
 
     // Services
-    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
+    rcl_interfaces::msg::SetParametersResult parameters_callback(const std::vector<rclcpp::Parameter> &parameters);
     OnSetParametersCallbackHandle::SharedPtr callback_handle_;
 
     // Messages
@@ -111,11 +111,11 @@ private:
     std::string thrust_setpoint_topic_;
     std::string torque_setpoint_topic_;
     std::string actuator_control_topic_;
-    // int failed_motor_ = 0;
+    std::string failure_detection_topic_;
+    std::atomic<int> failed_motor_{0};
 
     // UAV Parameters
     double _arm_length;
-    int _num_of_arms;
     double _moment_constant;
     double _thrust_constant;
     double _max_rotor_speed;
@@ -125,6 +125,7 @@ private:
     int _input_scaling;
     int _zero_position_armed;
     Eigen::MatrixXd torques_and_thrust_to_rotor_velocities_;
+    Eigen::MatrixXd torques_and_thrust_to_rotor_velocities_updated_;
     Eigen::MatrixXd throttles_to_normalized_torques_and_thrust_;
 
     // Controller gains
@@ -133,31 +134,26 @@ private:
     Eigen::Vector3d attitude_gain_;
     Eigen::Vector3d ang_vel_gain_;
 
-    // Logic switches
-    int control_mode_;
-    bool in_sitl_mode_;
-
     px4_msgs::msg::VehicleStatus current_status_;
     bool connected_ = false;
 
-    void loadParams();
     // void secureConnection();
     void arm();
     void disarm();
 
     // CallBacks
-    void commandPoseCallback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
-    void vehicle_odometryCallback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg);
-    void vehicleStatusCallback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg);
+    void command_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
+    void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg);
+    void vehicle_status_callback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg);
 
-    void publishActuatorMotorsMsg(const Eigen::VectorXd &throttles);
-    void publishOffboardControlModeMsg();
+    void actuator_motors_publisher(const Eigen::VectorXd &throttles);
+    void offboard_control_mode_publisher();
     void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
 
-    void compute_ControlAllocation_and_ActuatorEffect_matrices();
-    void UpdateAllocationMatrix(int failed_motor_);
-    void Control_On_Motor_Failure(const std_msgs::msg::Int32::SharedPtr msg);
-    void px4InverseSITL(Eigen::Vector4d *normalized_torque_and_thrust, Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
+    void update_allocation_matrix(int failed_motor_);
+    void failure_detection_callback(const std_msgs::msg::Int32::SharedPtr msg);
+    void px4_inverse_not_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
+    void px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d &vec_in)
     {
@@ -270,6 +266,157 @@ private:
                                       msg->pose.orientation.y,
                                       msg->pose.orientation.z);
         orientation_W_B = quaternion;
+    }
+
+    void load_setup_parameters_and_matrices()
+    {
+        // UAV Parameters
+        this->declare_parameter("failed_motor", 0);
+        this->declare_parameter("uav_parameters.mass", 0.0);
+        this->declare_parameter("uav_parameters.arm_length", 0.0);
+        this->declare_parameter("uav_parameters.num_of_arms", 4);
+        this->declare_parameter("uav_parameters.moment_constant", 0.0);
+        this->declare_parameter("uav_parameters.thrust_constant", 0.0);
+        this->declare_parameter("uav_parameters.max_rotor_speed", 0);
+        this->declare_parameter("uav_parameters.gravity", 0.0);
+        this->declare_parameter("uav_parameters.PWM_MIN", 0);
+        this->declare_parameter("uav_parameters.PWM_MAX", 0);
+        this->declare_parameter("uav_parameters.input_scaling", 0);
+        this->declare_parameter("uav_parameters.zero_position_armed", 0);
+        this->declare_parameter("uav_parameters.inertia.x", 0.0);
+        this->declare_parameter("uav_parameters.inertia.y", 0.0);
+        this->declare_parameter("uav_parameters.inertia.z", 0.0);
+        this->declare_parameter("uav_parameters.omega_to_pwm_coefficient.x_2", 0.0);
+        this->declare_parameter("uav_parameters.omega_to_pwm_coefficient.x_1", 0.0);
+        this->declare_parameter("uav_parameters.omega_to_pwm_coefficient.x_0", 0.0);
+
+        double _uav_mass = this->get_parameter("uav_parameters.mass").as_double();
+        _arm_length = this->get_parameter("uav_parameters.arm_length").as_double();
+        _moment_constant = this->get_parameter("uav_parameters.moment_constant").as_double();
+        _thrust_constant = this->get_parameter("uav_parameters.thrust_constant").as_double();
+        _max_rotor_speed = this->get_parameter("uav_parameters.max_rotor_speed").as_int();
+        double _gravity = this->get_parameter("uav_parameters.gravity").as_double();
+        _PWM_MIN = this->get_parameter("uav_parameters.PWM_MIN").as_int();
+        _PWM_MAX = this->get_parameter("uav_parameters.PWM_MAX").as_int();
+        _input_scaling = this->get_parameter("uav_parameters.input_scaling").as_int();
+        _zero_position_armed = this->get_parameter("uav_parameters.zero_position_armed").as_int();
+        double _inertia_x = this->get_parameter("uav_parameters.inertia.x").as_double();
+        double _inertia_y = this->get_parameter("uav_parameters.inertia.y").as_double();
+        double _inertia_z = this->get_parameter("uav_parameters.inertia.z").as_double();
+        double _omega_to_pwm_coefficient_x_2 = this->get_parameter("uav_parameters.omega_to_pwm_coefficient.x_2").as_double();
+        double _omega_to_pwm_coefficient_x_1 = this->get_parameter("uav_parameters.omega_to_pwm_coefficient.x_1").as_double();
+        double _omega_to_pwm_coefficient_x_0 = this->get_parameter("uav_parameters.omega_to_pwm_coefficient.x_0").as_double();
+        Eigen::Vector3d _inertia_matrix;
+        _inertia_matrix << _inertia_x, _inertia_y, _inertia_z;
+        _omega_to_pwm_coefficients << _omega_to_pwm_coefficient_x_2, _omega_to_pwm_coefficient_x_1, _omega_to_pwm_coefficient_x_0;
+
+        // Topics Names
+        this->declare_parameter("topics_names.command_pose_topic", "default");
+        this->declare_parameter("topics_names.command_traj_topic", "default");
+        this->declare_parameter("topics_names.odometry_topic", "default");
+        this->declare_parameter("topics_names.status_topic", "default");
+        this->declare_parameter("topics_names.battery_status_topic", "default");
+        this->declare_parameter("topics_names.actuator_status_topic", "default");
+        this->declare_parameter("topics_names.offboard_control_topic", "default");
+        this->declare_parameter("topics_names.vehicle_command_topic", "default");
+        this->declare_parameter("topics_names.attitude_setpoint_topic", "default");
+        this->declare_parameter("topics_names.thrust_setpoints_topic", "default");
+        this->declare_parameter("topics_names.torque_setpoints_topic", "default");
+        this->declare_parameter("topics_names.actuator_control_topic", "default");
+        this->declare_parameter("topics_names.failure_detection_topic", "default");
+
+        command_pose_topic_ = this->get_parameter("topics_names.command_pose_topic").as_string();
+        command_traj_topic_ = this->get_parameter("topics_names.command_traj_topic").as_string();
+        odometry_topic_ = this->get_parameter("topics_names.odometry_topic").as_string();
+        status_topic_ = this->get_parameter("topics_names.status_topic").as_string();
+        battery_status_topic_ = this->get_parameter("topics_names.battery_status_topic").as_string();
+        actuator_status_topic = this->get_parameter("topics_names.actuator_status_topic").as_string();
+        offboard_control_topic_ = this->get_parameter("topics_names.offboard_control_topic").as_string();
+        vehicle_command_topic_ = this->get_parameter("topics_names.vehicle_command_topic").as_string();
+        attitude_setpoint_topic_ = this->get_parameter("topics_names.attitude_setpoint_topic").as_string();
+        thrust_setpoint_topic_ = this->get_parameter("topics_names.thrust_setpoints_topic").as_string();
+        torque_setpoint_topic_ = this->get_parameter("topics_names.torque_setpoints_topic").as_string();
+        actuator_control_topic_ = this->get_parameter("topics_names.actuator_control_topic").as_string();
+        failure_detection_topic_ = this->get_parameter("topics_names.failure_detection_topic").as_string();
+        failed_motor_.store(this->get_parameter("failed_motor").as_int());
+
+        // Controller gains
+        this->declare_parameter("control_gains.K_p_x", 0.0);
+        this->declare_parameter("control_gains.K_p_y", 0.0);
+        this->declare_parameter("control_gains.K_p_z", 0.0);
+        this->declare_parameter("control_gains.K_v_x", 0.0);
+        this->declare_parameter("control_gains.K_v_y", 0.0);
+        this->declare_parameter("control_gains.K_v_z", 0.0);
+        this->declare_parameter("control_gains.K_R_x", 0.0);
+        this->declare_parameter("control_gains.K_R_y", 0.0);
+        this->declare_parameter("control_gains.K_R_z", 0.0);
+        this->declare_parameter("control_gains.K_w_x", 0.0);
+        this->declare_parameter("control_gains.K_w_y", 0.0);
+        this->declare_parameter("control_gains.K_w_z", 0.0);
+
+        position_gain_ << this->get_parameter("control_gains.K_p_x").as_double(),
+            this->get_parameter("control_gains.K_p_y").as_double(),
+            this->get_parameter("control_gains.K_p_z").as_double();
+
+        velocity_gain_ << this->get_parameter("control_gains.K_v_x").as_double(),
+            this->get_parameter("control_gains.K_v_y").as_double(),
+            this->get_parameter("control_gains.K_v_z").as_double();
+
+        attitude_gain_ << this->get_parameter("control_gains.K_R_x").as_double(),
+            this->get_parameter("control_gains.K_R_y").as_double(),
+            this->get_parameter("control_gains.K_R_z").as_double();
+
+        ang_vel_gain_ << this->get_parameter("control_gains.K_w_x").as_double(),
+            this->get_parameter("control_gains.K_w_y").as_double(),
+            this->get_parameter("control_gains.K_w_z").as_double();
+
+        controller_.setUavMass(_uav_mass);
+        controller_.setInertiaMatrix(_inertia_matrix);
+        controller_.setGravity(_gravity);
+        controller_.setKPositionGain(position_gain_);
+        controller_.setKVelocityGain(velocity_gain_);
+        controller_.setKAttitudeGain(attitude_gain_);
+        controller_.setKAngularRateGain(ang_vel_gain_);
+
+        // Compute Control Allocation and Actuator Effect matrices
+        const double kDegToRad = M_PI / 180.0;
+        Eigen::MatrixXd rotor_velocities_to_torques_and_thrust;
+        Eigen::MatrixXd mixing_matrix;
+
+        const double kS = std::sin(45 * kDegToRad);
+
+        rotor_velocities_to_torques_and_thrust.resize(4, 4);
+        mixing_matrix.resize(4, 4);
+
+        rotor_velocities_to_torques_and_thrust << -kS, kS, kS, -kS,
+            -kS, kS, -kS, kS,
+            -1, -1, 1, 1,
+            1, 1, 1, 1;
+
+        mixing_matrix << -0.495384, -0.707107, -0.765306, 1.0,
+            0.495384, 0.707107, -1.0, 1.0,
+            0.495384, -0.707107, 0.765306, 1.0,
+            -0.495384, 0.707107, 1.0, 1.0;
+
+        torques_and_thrust_to_rotor_velocities_.resize(4, 4);
+        throttles_to_normalized_torques_and_thrust_.resize(4, 4);
+
+        throttles_to_normalized_torques_and_thrust_ << -0.5718, 0.4376, 0.5718, -0.4376,
+            -0.3536, 0.3536, -0.3536, 0.3536,
+            -0.2832, -0.2832, 0.2832, 0.2832,
+            0.2500, 0.2500, 0.2500, 0.2500;
+
+        Eigen::Vector4d k;
+        k << _thrust_constant * _arm_length,
+            _thrust_constant * _arm_length,
+            _moment_constant * _thrust_constant,
+            _thrust_constant;
+
+        rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
+
+        torques_and_thrust_to_rotor_velocities_.setZero();
+        torques_and_thrust_to_rotor_velocities_ =
+            rotor_velocities_to_torques_and_thrust.completeOrthogonalDecomposition().pseudoInverse();
     }
 };
 
