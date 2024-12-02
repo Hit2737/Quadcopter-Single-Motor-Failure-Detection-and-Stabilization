@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'px4_model'
+package_name = 'px4_detector'
 
 setup(
     name=package_name,
@@ -27,7 +27,7 @@ setup(
     license='Apache License 2.0',
     entry_points={
         'console_scripts': [
-            'detector = px4_model.detector:main',
+            'detector = px4_detector.detector:main',
         ],
     },
 )

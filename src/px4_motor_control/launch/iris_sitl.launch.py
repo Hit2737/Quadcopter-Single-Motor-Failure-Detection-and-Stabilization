@@ -8,26 +8,26 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
    config_1 = os.path.join(
-      get_package_share_directory('px4_offboard_lowlevel'),
+      get_package_share_directory('px4_motor_control'),
       'config', 'uav_parameters',
-      'x500_param.yaml'
+      'iris_param.yaml'
       )
    
    config_2 = os.path.join(
-      get_package_share_directory('px4_offboard_lowlevel'),
+      get_package_share_directory('px4_motor_control'),
       'config', 'sitl',
       'sitl_params.yaml'
       )
 
    config_3 = os.path.join(
-      get_package_share_directory('px4_offboard_lowlevel'),
+      get_package_share_directory('px4_motor_control'),
       'config', 'controller',
-      'initial_gains_x500.yaml'
+      'initial_gains_iris.yaml'
       )
    
    return LaunchDescription([
       Node(
-         package='px4_offboard_lowlevel',
+         package='px4_motor_control',
          executable='offboard_controller_node',
          name='offboard_controller',
          parameters=[config_1, config_2, config_3]
