@@ -9,19 +9,19 @@ from launch_ros.actions import Node
 def generate_launch_description():
    config_1 = os.path.join(
       get_package_share_directory('px4_motor_control'),
-      'config', 'uav_parameters',
+      'config',
       'iris_param.yaml'
       )
    
    config_2 = os.path.join(
       get_package_share_directory('px4_motor_control'),
-      'config', 'sitl',
+      'config',
       'sitl_params.yaml'
       )
 
    config_3 = os.path.join(
       get_package_share_directory('px4_motor_control'),
-      'config', 'controller',
+      'config',
       'initial_gains_iris.yaml'
       )
    
