@@ -62,11 +62,11 @@ private:
     pose_stamped.pose.position.x = 0.0;
     pose_stamped.pose.position.y = 0.0;
     pose_stamped.pose.position.z = k;
-    pose_stamped.pose.orientation.w = 0.0;
+    pose_stamped.pose.orientation.w = 1.0;
 
     publisher_->publish(pose_stamped);
 
-    if (k < 10)
+    if (k < 30)
       k += 0.01;
   }
 

@@ -1,8 +1,10 @@
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from px4_msgs.msg import SensorCombined, VehicleGlobalPosition, SensorGps
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, Float32MultiArray
+
 
 class FailureDetector(Node):
     def __init__(self, frequency=100):
@@ -16,14 +18,8 @@ class FailureDetector(Node):
         self.gyroYg3 = False
         self.gyroXl5 = False
         self.gyroYl3 = False
-        self.acc_flag = False
-        self.vel_flag = False
         self.failed_motor = 0
-
-        # Initialize data storage
-        self.sensor_combined_data = None
-        self.vehicle_gps_position_data = None
-        self.vehicle_global_position_data = None
+        self.gyro_prev = np.array([0, 0, 0])
 
         # Define QoS settings
         qos_profile = QoSProfile(
@@ -57,10 +53,19 @@ class FailureDetector(Node):
             Int32, "/detected_failed_motor", qos_profile
         )
 
+        self.gyro_change = self.create_publisher(
+            Float32MultiArray, "/gyro_change", qos_profile
+        )
+
         # Create a timer to call the prediction function at a regular interval
         self.timer = self.create_timer(1 / self.frequency, self.predict_failure)
 
     def sensor_combined_callback(self, msg):
+        # Store the sensor data
+        dgyro_dt = (np.array(msg.gyro_rad) - self.gyro_prev) * self.frequency
+        self.gyro_prev = np.array(msg.gyro_rad)
+        self.gyro_change.publish(Float32MultiArray(data=dgyro_dt))
+
         if not self.gyroXl5 and msg.gyro_rad[0] > 5:
             self.gyroXg5 = True
         if not self.gyroYl3 and msg.gyro_rad[1] > 3:
@@ -71,6 +76,15 @@ class FailureDetector(Node):
             self.gyroYl3 = True
 
         if self.failed_motor == 0:
+            if dgyro_dt[0] > 20 and dgyro_dt[1] < -15:
+                self.failed_motor = 1
+            elif dgyro_dt[0] < -20 and dgyro_dt[1] > 15:
+                self.failed_motor = 2
+            elif dgyro_dt[0] < -20 and dgyro_dt[1] < -15:
+                self.failed_motor = 3
+            elif dgyro_dt[0] > 20 and dgyro_dt[1] > 15:
+                self.failed_motor = 4
+
             if self.gyroXg5 and self.gyroYl3:
                 self.failed_motor = 1
             elif self.gyroXl5 and self.gyroYg3:

@@ -136,22 +136,22 @@ void ControllerNode::update_allocation_matrix(int failed_motor_)
 
     Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(3, 3);
 
-    int update_i = 0;
+    int _i = 0;
     for (int i = 0; i < 4; i++)
     {
         if (i == 2)
             continue;
 
-        int update_j = 0;
+        int _j = 0;
         for (int j = 0; j < 4; j++)
         {
-            if (j == failed_motor_)
+            if (j == failed_motor_ - 1)
                 continue;
 
-            rotor_velocities_to_torques_and_thrust_updated(update_i, update_j) = rotor_velocities_to_torques_and_thrust(i, j);
-            ++update_j;
+            rotor_velocities_to_torques_and_thrust_updated(_i, _j) = rotor_velocities_to_torques_and_thrust(i, j);
+            ++_j;
         }
-        ++update_i;
+        ++_i;
     }
 
     torques_and_thrust_to_rotor_velocities_updated_.resize(3, 3);
@@ -198,31 +198,17 @@ void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen:
     Eigen::VectorXd omega_temp(3);
     omega.setZero();
     omega_temp = torques_and_thrust_to_rotor_velocities_updated_ * (modified_wrench);
-    for (int i = 0, update_i = 0; i < 4; i++)
+    for (int i = 0, _i = 0; i < 4; i++)
     {
-        if (i == failed_motor_)
+        if (i == failed_motor_ - 1)
             continue;
-        omega(i) = omega_temp(update_i);
-        update_i++;
+        omega(i) = omega_temp(_i);
+        _i++;
     }
 
     omega = omega.cwiseSqrt();
     *throttles = (omega - (_zero_position_armed * ones_temp));
     *throttles /= (_input_scaling);
-}
-
-// Function to arm the vehicle
-void ControllerNode::arm()
-{
-    publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0);
-    RCLCPP_INFO(this->get_logger(), "Arm command send");
-}
-
-// Function to disarm the vehicle
-void ControllerNode::disarm()
-{
-    publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0);
-    RCLCPP_INFO(this->get_logger(), "Disarm command send");
 }
 
 // Function to publish vehicle command
@@ -346,7 +332,9 @@ void ControllerNode::update_control_loop()
     //  calculate throttles
     Eigen::VectorXd throttles;
     if (failed_motor_.load() != 0)
+    {
         px4_inverse_failed(&throttles, &wrench);
+    }
     else
         px4_inverse_not_failed(&throttles, &wrench);
 
