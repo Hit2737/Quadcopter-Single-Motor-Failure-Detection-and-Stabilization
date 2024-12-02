@@ -39,8 +39,9 @@
 ControllerNode::ControllerNode()
     : Node("controller_node")
 {
+    // Load parameters and matrices
     load_setup_parameters_and_matrices();
-    RCLCPP_INFO(this->get_logger(), "Controller Node has been started");
+    RCLCPP_INFO(this->get_logger(), "Controller Node has been started ...");
 
     // Defining the compatible ROS 2 predefined QoS for PX4 topics
     rclcpp::QoS qos(10);
@@ -74,21 +75,30 @@ ControllerNode::ControllerNode()
 rcl_interfaces::msg::SetParametersResult ControllerNode::parameters_callback(const std::vector<rclcpp::Parameter> &parameters)
 {
     rcl_interfaces::msg::SetParametersResult result;
-    result.successful = true;
-    result.reason = "success";
     for (const auto &param : parameters)
     {
         if (param.get_name() == "failed_motor")
         {
             int new_value = param.as_int();
-            failed_motor_.store(new_value);
-            RCLCPP_INFO(this->get_logger(), "Updated failed_motor to [%d]", new_value);
-            update_allocation_matrix(new_value);
+            if (0 <= new_value && new_value <= 4)
+            {
+                result.successful = true;
+                result.reason = "success";
+                failed_motor_.store(new_value);
+                RCLCPP_INFO(this->get_logger(), "Updated failed_motor_ = [%d]", new_value);
+                update_allocation_matrix(new_value);
+            }
+            else
+            {
+                result.successful = false;
+                result.reason = "Invalid value for failed_motor_";
+            }
         }
     }
     return result;
 }
 
+// Function to update the control allocation matrix when a motor fails
 void ControllerNode::update_allocation_matrix(int failed_motor_)
 {
     const double kDegToRad = M_PI / 180.0;
@@ -151,6 +161,7 @@ void ControllerNode::update_allocation_matrix(int failed_motor_)
     RCLCPP_INFO(this->get_logger(), "Updated Allocation Matrix for failed motor %d", failed_motor_);
 }
 
+// Function to calculate throttles when no motor fails
 void ControllerNode::px4_inverse_not_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
 {
     Eigen::VectorXd omega;
@@ -169,6 +180,7 @@ void ControllerNode::px4_inverse_not_failed(Eigen::VectorXd *throttles, const Ei
     *throttles /= (_input_scaling);
 }
 
+// Function to calculate throttles when a motor fails
 void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
 {
     Eigen::VectorXd omega;
@@ -199,18 +211,21 @@ void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen:
     *throttles /= (_input_scaling);
 }
 
+// Function to arm the vehicle
 void ControllerNode::arm()
 {
     publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0);
     RCLCPP_INFO(this->get_logger(), "Arm command send");
 }
 
+// Function to disarm the vehicle
 void ControllerNode::disarm()
 {
     publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 0.0);
     RCLCPP_INFO(this->get_logger(), "Disarm command send");
 }
 
+// Function to publish vehicle command
 void ControllerNode::publish_vehicle_command(uint16_t command, float param1, float param2)
 {
     px4_msgs::msg::VehicleCommand msg{};
@@ -226,6 +241,7 @@ void ControllerNode::publish_vehicle_command(uint16_t command, float param1, flo
     vehicle_command_publisher_->publish(msg);
 }
 
+// Function to publish offboard control mode
 void ControllerNode::offboard_control_mode_publisher()
 {
     px4_msgs::msg::OffboardControlMode offboard_msg{};
@@ -240,31 +256,34 @@ void ControllerNode::offboard_control_mode_publisher()
 
     offboard_msg.timestamp = this->get_clock()->now().nanoseconds() / 1000;
     offboard_control_mode_publisher_->publish(offboard_msg);
-    RCLCPP_INFO_ONCE(get_logger(), "Offboard enabled");
 }
 
+// Function to get the pose message and update desired position and orientation
 void ControllerNode::command_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg)
 {
     Eigen::Vector3d position;
     Eigen::Quaterniond orientation;
     eigenTrajectoryPointFromPoseMsg(pose_msg, position, orientation);
-    RCLCPP_INFO_ONCE(get_logger(), "Controller got first command message.");
     controller_.setTrajectoryPoint(position, orientation);
+
+    RCLCPP_INFO_ONCE(get_logger(), "Controller got first command message.");
 }
 
-void ControllerNode::failure_detection_callback(const std_msgs::msg::Int32::SharedPtr msg)
+// Function to get the failure detection message and update the failed motor
+void ControllerNode::failure_detection_callback(const std_msgs::msg::Int32::SharedPtr fail_msg)
 {
-    if (failed_motor_.load() == 0 && msg->data != 0)
+    int failed_motor_temp = fail_msg->data;
+    if (failed_motor_.load() == 0 && 0 < failed_motor_temp && failed_motor_temp <= 4)
     {
-        update_allocation_matrix(msg->data);
-        failed_motor_.store(msg->data);
-        RCLCPP_INFO(this->get_logger(), "Motor %d failure detected. Applying Safe Control.", failed_motor_.load());
+        update_allocation_matrix(failed_motor_temp);
+        failed_motor_.store(failed_motor_temp);
+        RCLCPP_INFO(this->get_logger(), "Motor %d failure detected. Applying Safe Control ...", failed_motor_temp);
     }
 }
 
+// Function to get the odometry message and update the controller odometry
 void ControllerNode::vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg)
 {
-    //  Debug message
     RCLCPP_INFO_ONCE(get_logger(), "Controller got first odometry message.");
 
     Eigen::Vector3d position;
@@ -278,6 +297,7 @@ void ControllerNode::vehicle_odometry_callback(const px4_msgs::msg::VehicleOdome
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
 }
 
+// Function to get the vehicle status message and update the current status (arming and offboard mode)
 void ControllerNode::vehicle_status_callback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg)
 {
     current_status_ = *status_msg;
@@ -287,8 +307,8 @@ void ControllerNode::vehicle_status_callback(const px4_msgs::msg::VehicleStatus:
     }
     else
     {
-        RCLCPP_INFO(get_logger(), "NOT ARMED - vehicle_status_msg.");
-        arm();
+        RCLCPP_INFO(get_logger(), "NOT ARMED - vehicle_status_msg. Arm command sending ...");
+        publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_COMPONENT_ARM_DISARM, 1.0);
     }
     if (current_status_.nav_state == 14)
     {
@@ -296,14 +316,14 @@ void ControllerNode::vehicle_status_callback(const px4_msgs::msg::VehicleStatus:
     }
     else
     {
-        RCLCPP_INFO(get_logger(), "NOT OFFBOARD - vehicle_status_msg.");
+        RCLCPP_INFO(get_logger(), "NOT OFFBOARD - vehicle_status_msg. Offboard command sending ...");
         publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1.0, 6.0);
     }
 }
 
+// Function to publish the actuator motors message
 void ControllerNode::actuator_motors_publisher(const Eigen::VectorXd &throttles)
 {
-    // Publish the actuator motors message
     px4_msgs::msg::ActuatorMotors actuator_motors_msg;
     actuator_motors_msg.control = {(float)throttles[0], (float)throttles[1], (float)throttles[2], (float)throttles[3],
                                    std::nanf("1"), std::nanf("1"), std::nanf("1"), std::nanf("1"),
@@ -315,14 +335,15 @@ void ControllerNode::actuator_motors_publisher(const Eigen::VectorXd &throttles)
     actuator_motors_publisher_->publish(actuator_motors_msg);
 }
 
+// Function to update the control loop
 void ControllerNode::update_control_loop()
 {
-    //  calculate controller output
+    //  Compute thrust and torque
     Eigen::VectorXd wrench;
     Eigen::Quaterniond desired_quaternion;
     controller_.compute_thrust_and_torque(&wrench, &desired_quaternion);
 
-    // Normalize the controller output
+    //  calculate throttles
     Eigen::VectorXd throttles;
     if (failed_motor_.load() != 0)
         px4_inverse_failed(&throttles, &wrench);
@@ -336,6 +357,7 @@ void ControllerNode::update_control_loop()
     }
 }
 
+// Main function
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);

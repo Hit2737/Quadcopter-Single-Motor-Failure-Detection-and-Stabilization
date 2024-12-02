@@ -41,7 +41,7 @@ class controller
 {
 public:
     controller();
-    void compute_thrust_and_torque(Eigen::VectorXd *controller_torque_thrust, Eigen::Quaterniond *desired_quaternion);
+    void compute_thrust_and_torque(Eigen::VectorXd *wrench, Eigen::Quaterniond *desired_quaternion);
 
     // Setters
     void setOdometry(const Eigen::Vector3d &position_W, const Eigen::Quaterniond &orientation_B_W,

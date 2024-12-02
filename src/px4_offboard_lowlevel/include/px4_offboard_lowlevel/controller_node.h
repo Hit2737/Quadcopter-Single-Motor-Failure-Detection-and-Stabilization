@@ -151,7 +151,7 @@ private:
     void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
 
     void update_allocation_matrix(int failed_motor_);
-    void failure_detection_callback(const std_msgs::msg::Int32::SharedPtr msg);
+    void failure_detection_callback(const std_msgs::msg::Int32::SharedPtr fail_msg);
     void px4_inverse_not_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
     void px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
 

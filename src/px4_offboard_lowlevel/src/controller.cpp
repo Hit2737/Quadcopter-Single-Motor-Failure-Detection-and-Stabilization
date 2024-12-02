@@ -39,11 +39,11 @@ controller::controller()
 }
 
 void controller::compute_thrust_and_torque(
-    Eigen::VectorXd *controller_torque_thrust, Eigen::Quaterniond *desired_quaternion)
+    Eigen::VectorXd *wrench, Eigen::Quaterniond *desired_quaternion)
 {
-        assert(controller_torque_thrust);
+        assert(wrench);
 
-        controller_torque_thrust->resize(4);
+        wrench->resize(4);
 
         // Geometric controller based on:
         // T. Lee, M. Leok and N. H. McClamroch, "Geometric tracking control of a quadrotor UAV on SE(3),
@@ -90,5 +90,5 @@ void controller::compute_thrust_and_torque(
         tau = -attitude_gain_.cwiseProduct(e_R) - angular_rate_gain_.cwiseProduct(e_omega) + angular_velocity_B_.cross(_inertia_matrix.asDiagonal() * angular_velocity_B_);
 
         // Output the wrench
-        *controller_torque_thrust << tau, thrust;
+        *wrench << tau, thrust;
 }
