@@ -67,9 +67,11 @@ private:
       pose_stamped.pose.position.y = r * sin(angle);
       pose_stamped.pose.position.z = k;
       pose_stamped.pose.orientation.w = 1.0;
-      angle += 0.005;
-      if (r < 2.0)
-        r += 0.005;
+      if (r < 3.0)
+      {
+        angle += 0.005;
+        r += 0.001;
+      }
     }
     else
     {
