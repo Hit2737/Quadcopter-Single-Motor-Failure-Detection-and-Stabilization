@@ -46,6 +46,7 @@ class CirclePublisherNode : public rclcpp::Node
 public:
   double angle = M_PI;
   double k = 0.0;
+  double r = 0.0;
   CirclePublisherNode() : Node("circle_publisher")
   {
     publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("command/pose", 10);
@@ -60,13 +61,15 @@ private:
     geometry_msgs::msg::PoseStamped pose_stamped;
     pose_stamped.header.stamp = this->now();
     pose_stamped.header.frame_id = "base_link"; // Change this to your desired frame ID
-    if (k > 9.9)
+    if (k > 4.0)
     {
-      pose_stamped.pose.position.x = 2.0 * cos(angle);
-      pose_stamped.pose.position.y = 2.0 * sin(angle);
+      pose_stamped.pose.position.x = r * cos(angle);
+      pose_stamped.pose.position.y = r * sin(angle);
       pose_stamped.pose.position.z = k;
       pose_stamped.pose.orientation.w = 1.0;
       angle += 0.005;
+      if (r < 2.0)
+        r += 0.005;
     }
     else
     {

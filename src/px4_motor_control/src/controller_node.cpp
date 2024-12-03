@@ -334,9 +334,8 @@ void ControllerNode::vehicle_odometry_callback(const px4_msgs::msg::VehicleOdome
 
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
 
-    if (failed_motor_.load() != 0 && position[2] < 0.1)
+    if (failed_motor_.load() != 0 && position[2] < 0.5)
     {
-        RCLCPP_INFO(get_logger(), "Quadrotor is on the ground. Exiting ...");
         exit(0);
     }
 }
