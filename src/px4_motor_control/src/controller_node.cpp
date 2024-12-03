@@ -157,9 +157,9 @@ void ControllerNode::update_allocation_matrix(int failed_motor_)
     }
 
     Eigen::Matrix3d G;
-    G << rotor_velocities_to_torques_and_thrust_updated(0) / _inertia_matrix(0),
-        rotor_velocities_to_torques_and_thrust_updated(1) / _inertia_matrix(1),
-        rotor_velocities_to_torques_and_thrust_updated(3) / _uav_mass;
+    G << rotor_velocities_to_torques_and_thrust_updated(0, 0) / _inertia_matrix(0), rotor_velocities_to_torques_and_thrust_updated(0, 1) / _inertia_matrix(0), rotor_velocities_to_torques_and_thrust_updated(0, 2) / _inertia_matrix(0),
+        rotor_velocities_to_torques_and_thrust_updated(1, 0) / _inertia_matrix(1), rotor_velocities_to_torques_and_thrust_updated(1, 1) / _inertia_matrix(1), rotor_velocities_to_torques_and_thrust_updated(1, 2) / _inertia_matrix(1),
+        rotor_velocities_to_torques_and_thrust_updated(2, 0) / _uav_mass, rotor_velocities_to_torques_and_thrust_updated(2, 1) / _uav_mass, rotor_velocities_to_torques_and_thrust_updated(2, 2) / _uav_mass;
 
     G_inv = G.completeOrthogonalDecomposition().pseudoInverse();
 
@@ -187,6 +187,8 @@ void ControllerNode::px4_inverse_not_failed(Eigen::VectorXd *throttles, const Ei
     omega = omega.cwiseSqrt();
     *throttles = (omega - (_zero_position_armed * ones_temp));
     *throttles /= (_input_scaling);
+
+    throttles_prev = *throttles;
 }
 
 // Function to calculate throttles when a motor fails
@@ -222,9 +224,17 @@ void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen:
     // Calculate motor speeds
     Eigen::Vector3d y_dot = (*y_ - y_prev_) / time_step_;
     Eigen::VectorXd intermediate = G_inv * (*v_in - y_dot);
-    *throttles += intermediate;
+    throttles->setZero();
+    for (int i = 0, _i = 0; i < 4; i++)
+    {
+        if (i == failed_motor_ - 1)
+            continue;
+        (*throttles)(i) = intermediate(_i) + throttles_prev(_i);
+        _i++;
+    }
 
     // Update previous values
+    throttles_prev = *throttles;
     y_prev_ = *y_;
 }
 

@@ -44,6 +44,7 @@ using namespace std::chrono_literals;
 class CirclePublisherNode : public rclcpp::Node
 {
 public:
+  double angle = M_PI;
   double k = 0.0;
   CirclePublisherNode() : Node("circle_publisher")
   {
@@ -55,19 +56,27 @@ public:
 private:
   void publishCirclePose()
   {
+
     geometry_msgs::msg::PoseStamped pose_stamped;
     pose_stamped.header.stamp = this->now();
     pose_stamped.header.frame_id = "base_link"; // Change this to your desired frame ID
-
-    pose_stamped.pose.position.x = 0.0;
-    pose_stamped.pose.position.y = 0.0;
-    pose_stamped.pose.position.z = k;
-    pose_stamped.pose.orientation.w = 1.0;
-
-    publisher_->publish(pose_stamped);
-
-    if (k < 10)
+    if (k > 9.9)
+    {
+      pose_stamped.pose.position.x = 2.0 * cos(angle);
+      pose_stamped.pose.position.y = 2.0 * sin(angle);
+      pose_stamped.pose.position.z = k;
+      pose_stamped.pose.orientation.w = 1.0;
+      angle += 0.005;
+    }
+    else
+    {
+      pose_stamped.pose.position.x = 0.0;
+      pose_stamped.pose.position.y = 0.0;
+      pose_stamped.pose.position.z = k;
+      pose_stamped.pose.orientation.w = 1.0;
       k += 0.01;
+    }
+    publisher_->publish(pose_stamped);
   }
 
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisher_;

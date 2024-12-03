@@ -47,7 +47,7 @@
 #include <px4_msgs/msg/vehicle_attitude_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_thrust_setpoint.hpp>
 #include <px4_msgs/msg/vehicle_torque_setpoint.hpp>
-
+#include <px4_msgs/msg/sensor_combined.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <trajectory_msgs/msg/multi_dof_joint_trajectory_point.hpp>
@@ -133,6 +133,7 @@ private:
     Eigen::MatrixXd throttles_to_normalized_torques_and_thrust_;
     Eigen::Matrix3d G_inv;
     Eigen::Vector3d y_prev_ = Eigen::Vector3d::Zero();
+    Eigen::VectorXd throttles_prev = Eigen::VectorXd::Zero(4);
 
     // Controller gains
     Eigen::Vector3d position_gain_;
@@ -147,9 +148,8 @@ private:
     void command_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg);
     void vehicle_status_callback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg);
-    void accelerometer_callback(const px4_msgs::msg::SensorCombined::SharedPtr accel_msg)
-
-        void actuator_motors_publisher(const Eigen::VectorXd &throttles);
+    void accelerometer_callback(const px4_msgs::msg::SensorCombined::SharedPtr accel_msg);
+    void actuator_motors_publisher(const Eigen::VectorXd &throttles);
     void offboard_control_mode_publisher();
     void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
 

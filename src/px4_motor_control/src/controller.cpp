@@ -52,6 +52,7 @@ void controller::compute_thrust_and_torque(
     // Trajectory tracking.
     double thrust;
     Eigen::Matrix3d R_d_w;
+    R_d_w.setZero();
 
     // Compute translational tracking errors.
     const Eigen::Vector3d e_p =
@@ -80,7 +81,7 @@ void controller::compute_thrust_and_torque(
     transform_matrix << 0, 1.0 / h3,
         -1.0 / h3, 0;
 
-    Eigen::Vector2d intermediate = v_out - Eigen::Vector2d(h2, -h1) * attitude_rate_B_(2) - n_I_dot_des;
+    Eigen::Vector2d intermediate = v_out - Eigen::Vector2d(h2 * attitude_rate_B_(2), -h1 * attitude_rate_B_(2)) - Eigen::Vector2d(n_I_dot_des(0), n_I_dot_des(1));
     Eigen::Vector2d p_q_des = transform_matrix * intermediate;
 
     // Calculate Desired f_B_z_des
