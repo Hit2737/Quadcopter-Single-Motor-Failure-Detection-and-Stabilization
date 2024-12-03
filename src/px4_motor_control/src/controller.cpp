@@ -39,7 +39,7 @@ controller::controller()
 }
 
 void controller::compute_thrust_and_torque(
-    Eigen::VectorXd *wrench, Eigen::Quaterniond *desired_quaternion, double time_step)
+    Eigen::VectorXd *wrench, Eigen::Vector3d *v_in, Eigen::Vector3d *y_, Eigen::Quaterniond *desired_quaternion, double time_step)
 {
     assert(wrench);
 
@@ -89,9 +89,12 @@ void controller::compute_thrust_and_torque(
 
     // Calculate V_in
     Eigen::Vector2d p_q_dot_des = (p_q_des - p_q_des_prev) / time_step;
-    Eigen::Vector3d v_in;
     integral_f_B_z_des += (f_B_z_des - _uav_mass * acceleration_B_(2)) * time_step;
-    v_in << p_q_dot_des(0) + k1 * (p_q_des(0) - attitude_B_(0)), p_q_dot_des(1) + k2 * (p_q_des(1) - attitude_B_(1)), f_B_z_des + k3 * (integral_f_B_z_des);
+    *v_in << p_q_dot_des(0) + k1 * (p_q_des(0) - attitude_B_(0)), p_q_dot_des(1) + k2 * (p_q_des(1) - attitude_B_(1)), f_B_z_des + k3 * (integral_f_B_z_des);
+
+    // Calculate y_
+    integral_f_B_z += _uav_mass * acceleration_B_(2) * time_step;
+    *y_ << attitude_rate_B_(0), attitude_rate_B_(1), integral_f_B_z;
 
     // Calculate Desired Rotational Matrix
     const Eigen::Vector3d B_x_d(std::cos(r_yaw), std::sin(r_yaw), 0.0);

@@ -41,7 +41,7 @@ class controller
 {
 public:
     controller();
-    void compute_thrust_and_torque(Eigen::VectorXd *wrench, Eigen::Quaterniond *desired_quaternion, double time_step);
+    void compute_thrust_and_torque(Eigen::VectorXd *wrench, Eigen::Vector3d *v_in, Eigen::Vector3d *y_, Eigen::Quaterniond *desired_quaternion, double time_step);
 
     // variables
     Eigen::Vector3d I_a_d_prev = Eigen::Vector3d::Zero();
@@ -51,6 +51,7 @@ public:
     double k2 = 0.1;
     double k3 = 0.1;
     double integral_f_B_z_des = 0.0;
+    double integral_f_B_z = 0.0;
 
     // Setters
     void setOdometry(const Eigen::Vector3d &position_W, const Eigen::Quaterniond &orientation_B_W,

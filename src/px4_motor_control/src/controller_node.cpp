@@ -156,6 +156,13 @@ void ControllerNode::update_allocation_matrix(int failed_motor_)
         ++_i;
     }
 
+    Eigen::Matrix3d G;
+    G << rotor_velocities_to_torques_and_thrust_updated(0) / _inertia_matrix(0),
+        rotor_velocities_to_torques_and_thrust_updated(1) / _inertia_matrix(1),
+        rotor_velocities_to_torques_and_thrust_updated(3) / _uav_mass;
+
+    G_inv = G.completeOrthogonalDecomposition().pseudoInverse();
+
     torques_and_thrust_to_rotor_velocities_updated_.resize(3, 3);
     torques_and_thrust_to_rotor_velocities_updated_ =
         rotor_velocities_to_torques_and_thrust_updated.completeOrthogonalDecomposition().pseudoInverse();
@@ -183,7 +190,7 @@ void ControllerNode::px4_inverse_not_failed(Eigen::VectorXd *throttles, const Ei
 }
 
 // Function to calculate throttles when a motor fails
-void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench)
+void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench, Eigen::Vector3d *v_in, Eigen::Vector3d *y_)
 {
     Eigen::VectorXd omega;
     Eigen::VectorXd ones_temp;
@@ -211,6 +218,14 @@ void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen:
     omega = omega.cwiseSqrt();
     *throttles = (omega - (_zero_position_armed * ones_temp));
     *throttles /= (_input_scaling);
+
+    // Calculate motor speeds
+    Eigen::Vector3d y_dot = (*y_ - y_prev_) / time_step_;
+    Eigen::VectorXd intermediate = G_inv * (*v_in - y_dot);
+    *throttles += intermediate;
+
+    // Update previous values
+    y_prev_ = *y_;
 }
 
 // Function to publish vehicle command
@@ -336,8 +351,10 @@ void ControllerNode::update_control_loop()
 {
     //  Compute thrust and torque
     Eigen::VectorXd wrench;
+    Eigen::Vector3d v_in;
+    Eigen::Vector3d y_;
     Eigen::Quaterniond desired_quaternion;
-    controller_.compute_thrust_and_torque(&wrench, &desired_quaternion, time_step_);
+    controller_.compute_thrust_and_torque(&wrench, &v_in, &y_, &desired_quaternion, time_step_);
 
     //  calculate throttles
     Eigen::VectorXd throttles;
@@ -346,7 +363,7 @@ void ControllerNode::update_control_loop()
         px4_inverse_failed(&throttles, &wrench);
     }
     else
-        px4_inverse_not_failed(&throttles, &wrench);
+        px4_inverse_not_failed(&throttles, &wrench, &v_in, &y_);
 
     // Publish the controller output
     if (current_status_.nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD)

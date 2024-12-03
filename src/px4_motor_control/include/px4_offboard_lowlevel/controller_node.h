@@ -117,6 +117,8 @@ private:
     std::atomic<int> failed_motor_{0};
 
     // UAV Parameters
+    double _uav_mass;
+    Eigen::Vector3d _inertia_matrix;
     double _arm_length;
     double _moment_constant;
     double _thrust_constant;
@@ -129,6 +131,8 @@ private:
     Eigen::MatrixXd torques_and_thrust_to_rotor_velocities_;
     Eigen::MatrixXd torques_and_thrust_to_rotor_velocities_updated_;
     Eigen::MatrixXd throttles_to_normalized_torques_and_thrust_;
+    Eigen::Matrix3d G_inv;
+    Eigen::Vector3d y_prev_ = Eigen::Vector3d::Zero();
 
     // Controller gains
     Eigen::Vector3d position_gain_;
@@ -138,10 +142,6 @@ private:
 
     px4_msgs::msg::VehicleStatus current_status_;
     bool connected_ = false;
-
-    // void secureConnection();
-    void arm();
-    void disarm();
 
     // CallBacks
     void command_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
@@ -156,7 +156,7 @@ private:
     void update_allocation_matrix(int failed_motor_);
     void failure_detection_callback(const std_msgs::msg::Int32::SharedPtr fail_msg);
     void px4_inverse_not_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
-    void px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
+    void px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench, Eigen::Vector3d *v_in, Eigen::Vector3d *y_);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d &vec_in)
     {
@@ -293,7 +293,7 @@ private:
         this->declare_parameter("uav_parameters.omega_to_pwm_coefficient.x_1", 0.0);
         this->declare_parameter("uav_parameters.omega_to_pwm_coefficient.x_0", 0.0);
 
-        double _uav_mass = this->get_parameter("uav_parameters.mass").as_double();
+        _uav_mass = this->get_parameter("uav_parameters.mass").as_double();
         _arm_length = this->get_parameter("uav_parameters.arm_length").as_double();
         _moment_constant = this->get_parameter("uav_parameters.moment_constant").as_double();
         _thrust_constant = this->get_parameter("uav_parameters.thrust_constant").as_double();
@@ -309,7 +309,7 @@ private:
         double _omega_to_pwm_coefficient_x_2 = this->get_parameter("uav_parameters.omega_to_pwm_coefficient.x_2").as_double();
         double _omega_to_pwm_coefficient_x_1 = this->get_parameter("uav_parameters.omega_to_pwm_coefficient.x_1").as_double();
         double _omega_to_pwm_coefficient_x_0 = this->get_parameter("uav_parameters.omega_to_pwm_coefficient.x_0").as_double();
-        Eigen::Vector3d _inertia_matrix;
+
         _inertia_matrix << _inertia_x, _inertia_y, _inertia_z;
         _omega_to_pwm_coefficients << _omega_to_pwm_coefficient_x_2, _omega_to_pwm_coefficient_x_1, _omega_to_pwm_coefficient_x_0;
 
