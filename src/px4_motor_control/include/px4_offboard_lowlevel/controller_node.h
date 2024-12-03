@@ -137,10 +137,6 @@ private:
     px4_msgs::msg::VehicleStatus current_status_;
     bool connected_ = false;
 
-    // void secureConnection();
-    void arm();
-    void disarm();
-
     // CallBacks
     void command_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg);
@@ -154,6 +150,7 @@ private:
     void failure_detection_callback(const std_msgs::msg::Int32::SharedPtr fail_msg);
     void px4_inverse_not_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
     void px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen::VectorXd *wrench);
+    Eigen::MatrixXd pseudoInverse(const Eigen::MatrixXd &A);
 
     inline Eigen::Vector3d rotateVectorFromToENU_NED(const Eigen::Vector3d &vec_in)
     {
