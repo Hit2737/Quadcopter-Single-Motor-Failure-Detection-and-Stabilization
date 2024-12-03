@@ -360,10 +360,10 @@ void ControllerNode::update_control_loop()
     Eigen::VectorXd throttles;
     if (failed_motor_.load() != 0)
     {
-        px4_inverse_failed(&throttles, &wrench);
+        px4_inverse_failed(&throttles, &wrench, &v_in, &y_);
     }
     else
-        px4_inverse_not_failed(&throttles, &wrench, &v_in, &y_);
+        px4_inverse_not_failed(&throttles, &wrench);
 
     // Publish the controller output
     if (current_status_.nav_state == px4_msgs::msg::VehicleStatus::NAVIGATION_STATE_OFFBOARD)

@@ -50,6 +50,8 @@ public:
     double k1 = 0.1;
     double k2 = 0.1;
     double k3 = 0.1;
+    double kx = 0.1;
+    double ky = 0.1;
     double integral_f_B_z_des = 0.0;
     double integral_f_B_z = 0.0;
 
@@ -130,8 +132,6 @@ private:
     double _uav_mass;
     Eigen::Vector3d _inertia_matrix;
     double _gravity;
-    double kx = 0.1;
-    double ky = 0.1;
 
     // Lee Controller Gains
     Eigen::Vector3d position_gain_;

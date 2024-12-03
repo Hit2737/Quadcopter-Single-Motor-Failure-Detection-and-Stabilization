@@ -71,7 +71,7 @@ void controller::compute_thrust_and_torque(
     const Eigen::Vector3d attitude_rate_B_ = (attitude_B_ - attitude_B_prev) / time_step;
     const Eigen::Vector3d n_B = R_B_W_.col(2);
     const Eigen::Vector3d n_B_des = R_B_W_ * B_z_d;
-    const Eigen::Vector3d n_B_dot_des = n_B_des.cross(attitude_rate_B_) + R_B_W_ * n_I_dot_des;
+    // const Eigen::Vector3d n_B_dot_des = n_B_des.cross(attitude_rate_B_) + R_B_W_ * n_I_dot_des;
     const double h1 = n_B_des(0), h2 = n_B_des(1), h3 = n_B_des(2);
     const Eigen::Vector2d v_out = {kx * (n_B(0) - h1), ky * (n_B(1) - h2)};
 

@@ -76,7 +76,7 @@ private:
     rclcpp::TimerBase::SharedPtr controllerTimer;
     rclcpp::TimerBase::SharedPtr offboardTimer;
 
-    // subscribers
+    // Subscribers
     rclcpp::Subscription<px4_msgs::msg::VehicleStatus>::SharedPtr vehicle_status_sub_;
     rclcpp::Subscription<px4_msgs::msg::VehicleOdometry>::SharedPtr vehicle_odometry_sub_;
     rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_sub_;
