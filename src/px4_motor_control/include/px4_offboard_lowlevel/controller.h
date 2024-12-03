@@ -46,6 +46,11 @@ public:
     // variables
     Eigen::Vector3d I_a_d_prev = Eigen::Vector3d::Zero();
     Eigen::Vector3d attitude_B_prev = Eigen::Vector3d::Zero();
+    Eigen::Vector2d p_q_des_prev = Eigen::Vector2d::Zero();
+    double k1 = 0.1;
+    double k2 = 0.1;
+    double k3 = 0.1;
+    double integral_f_B_z_des = 0.0;
 
     // Setters
     void setOdometry(const Eigen::Vector3d &position_W, const Eigen::Quaterniond &orientation_B_W,
@@ -76,6 +81,11 @@ public:
         r_R_B_W_ = orientation_W.toRotationMatrix();
         r_yaw = r_R_B_W_.eulerAngles(0, 1, 2)(2);
         r_yaw_rate = 0.0;
+    }
+
+    void setAccelerometerData(const Eigen::Vector3d &accelerometer_data)
+    {
+        acceleration_B_ = accelerometer_data;
     }
 
     void setKPositionGain(const Eigen::Vector3d &PositionGain)
@@ -131,9 +141,11 @@ private:
     // Current states
     Eigen::Vector3d position_W_;
     Eigen::Vector3d velocity_W_;
+    Eigen::Vector3d acceleration_B_;
     Eigen::Vector3d attitude_B_;
     Eigen::Matrix3d R_B_W_;
     Eigen::Vector3d angular_velocity_B_;
+
     // References
     Eigen::Vector3d r_position_W_;
     Eigen::Vector3d r_velocity_W_;

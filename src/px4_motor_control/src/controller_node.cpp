@@ -52,6 +52,7 @@ ControllerNode::ControllerNode()
     vehicle_status_sub_ = this->create_subscription<px4_msgs::msg::VehicleStatus>(status_topic_, qos, std::bind(&ControllerNode::vehicle_status_callback, this, _1));
     command_pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(command_pose_topic_, qos, std::bind(&ControllerNode::command_pose_callback, this, _1));
     failure_detection_sub_ = this->create_subscription<std_msgs::msg::Int32>(failure_detection_topic_, qos, std::bind(&ControllerNode::failure_detection_callback, this, _1));
+    accelerometer_sub_ = this->create_subscription<px4_msgs::msg::SensorCombined>("/fmu/out/sensor_combined", qos, std::bind(&ControllerNode::accelerometer_callback, this, _1));
 
     // Publishers
     actuator_motors_publisher_ = this->create_publisher<px4_msgs::msg::ActuatorMotors>(actuator_control_topic_, 10);
@@ -306,6 +307,14 @@ void ControllerNode::vehicle_status_callback(const px4_msgs::msg::VehicleStatus:
         RCLCPP_INFO(get_logger(), "NOT OFFBOARD - vehicle_status_msg. Offboard command sending ...");
         publish_vehicle_command(px4_msgs::msg::VehicleCommand::VEHICLE_CMD_DO_SET_MODE, 1.0, 6.0);
     }
+}
+
+// Function to get the accelerometer message and update the controller accelerometer data
+void ControllerNode::accelerometer_callback(const px4_msgs::msg::SensorCombined::SharedPtr accel_msg)
+{
+    Eigen::Vector3d accelerometer_data;
+    accelerometer_data << accel_msg->accelerometer_m_s2[0], accel_msg->accelerometer_m_s2[1], accel_msg->accelerometer_m_s2[2];
+    controller_.setAccelerometerData(accelerometer_data);
 }
 
 // Function to publish the actuator motors message

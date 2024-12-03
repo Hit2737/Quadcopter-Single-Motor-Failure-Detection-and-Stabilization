@@ -87,6 +87,12 @@ void controller::compute_thrust_and_torque(
     Eigen::Vector3d something = R_B_W_ * (I_a_d - _uav_mass * _gravity * Eigen::Vector3d::UnitZ());
     double f_B_z_des = (something.dot(n_B_des)) / n_B(2);
 
+    // Calculate V_in
+    Eigen::Vector2d p_q_dot_des = (p_q_des - p_q_des_prev) / time_step;
+    Eigen::Vector3d v_in;
+    integral_f_B_z_des += (f_B_z_des - _uav_mass * acceleration_B_(2)) * time_step;
+    v_in << p_q_dot_des(0) + k1 * (p_q_des(0) - attitude_B_(0)), p_q_dot_des(1) + k2 * (p_q_des(1) - attitude_B_(1)), f_B_z_des + k3 * (integral_f_B_z_des);
+
     // Calculate Desired Rotational Matrix
     const Eigen::Vector3d B_x_d(std::cos(r_yaw), std::sin(r_yaw), 0.0);
     Eigen::Vector3d B_y_d = B_z_d.cross(B_x_d);
@@ -113,6 +119,7 @@ void controller::compute_thrust_and_torque(
     // prev updates
     I_a_d_prev = I_a_d;
     attitude_B_prev = attitude_B_;
+    p_q_des_prev = p_q_des;
 
     // Output the wrench
     *wrench << tau, thrust;

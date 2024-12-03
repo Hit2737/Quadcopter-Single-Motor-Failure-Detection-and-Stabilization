@@ -82,6 +82,7 @@ private:
     rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_event_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr command_pose_sub_;
     rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr failure_detection_sub_;
+    rclcpp::Subscription<px4_msgs::msg::SensorCombined>::SharedPtr accelerometer_sub_;
 
     // Publishers
     rclcpp::Publisher<px4_msgs::msg::ActuatorMotors>::SharedPtr actuator_motors_publisher_;
@@ -146,8 +147,9 @@ private:
     void command_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose_msg);
     void vehicle_odometry_callback(const px4_msgs::msg::VehicleOdometry::SharedPtr odom_msg);
     void vehicle_status_callback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg);
+    void accelerometer_callback(const px4_msgs::msg::SensorCombined::SharedPtr accel_msg)
 
-    void actuator_motors_publisher(const Eigen::VectorXd &throttles);
+        void actuator_motors_publisher(const Eigen::VectorXd &throttles);
     void offboard_control_mode_publisher();
     void publish_vehicle_command(uint16_t command, float param1 = 0.0, float param2 = 0.0);
 
