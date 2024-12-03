@@ -41,13 +41,18 @@ class controller
 {
 public:
     controller();
-    void compute_thrust_and_torque(Eigen::VectorXd *wrench, Eigen::Quaterniond *desired_quaternion);
+    void compute_thrust_and_torque(Eigen::VectorXd *wrench, Eigen::Quaterniond *desired_quaternion, double time_step);
+
+    // variables
+    Eigen::Vector3d I_a_d_prev = Eigen::Vector3d::Zero();
+    Eigen::Vector3d attitude_B_prev = Eigen::Vector3d::Zero();
 
     // Setters
     void setOdometry(const Eigen::Vector3d &position_W, const Eigen::Quaterniond &orientation_B_W,
                      const Eigen::Vector3d &velocity_B, const Eigen::Vector3d &angular_velocity_B)
     {
         R_B_W_ = orientation_B_W.toRotationMatrix();
+        attitude_B_ = orientation_B_W.toRotationMatrix().eulerAngles(0, 1, 2);
         position_W_ = position_W;
         velocity_W_ = R_B_W_ * velocity_B;
         angular_velocity_B_ = angular_velocity_B;
@@ -114,6 +119,8 @@ private:
     double _uav_mass;
     Eigen::Vector3d _inertia_matrix;
     double _gravity;
+    double kx = 0.1;
+    double ky = 0.1;
 
     // Lee Controller Gains
     Eigen::Vector3d position_gain_;
@@ -124,6 +131,7 @@ private:
     // Current states
     Eigen::Vector3d position_W_;
     Eigen::Vector3d velocity_W_;
+    Eigen::Vector3d attitude_B_;
     Eigen::Matrix3d R_B_W_;
     Eigen::Vector3d angular_velocity_B_;
     // References

@@ -66,7 +66,7 @@ private:
 
     publisher_->publish(pose_stamped);
 
-    if (k < 30)
+    if (k < 10)
       k += 0.01;
   }
 

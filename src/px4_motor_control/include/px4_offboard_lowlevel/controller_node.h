@@ -72,6 +72,7 @@ private:
     controller controller_;
 
     // Timers
+    double time_step_;
     rclcpp::TimerBase::SharedPtr controllerTimer;
     rclcpp::TimerBase::SharedPtr offboardTimer;
 

@@ -63,8 +63,9 @@ ControllerNode::ControllerNode()
         std::bind(&ControllerNode::parameters_callback, this, std::placeholders::_1));
 
     // Timers
+    time_step_ = 0.01;
     std::chrono::duration<double> offboard_period(0.33);
-    std::chrono::duration<double> controller_period(0.01);
+    std::chrono::duration<double> controller_period(time_step_);
     offboardTimer = this->create_wall_timer(offboard_period, [=]()
                                             { offboard_control_mode_publisher(); });
     controllerTimer = this->create_wall_timer(controller_period, [=]()
@@ -327,7 +328,7 @@ void ControllerNode::update_control_loop()
     //  Compute thrust and torque
     Eigen::VectorXd wrench;
     Eigen::Quaterniond desired_quaternion;
-    controller_.compute_thrust_and_torque(&wrench, &desired_quaternion);
+    controller_.compute_thrust_and_torque(&wrench, &desired_quaternion, time_step_);
 
     //  calculate throttles
     Eigen::VectorXd throttles;
