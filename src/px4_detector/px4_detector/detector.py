@@ -76,13 +76,13 @@ class FailureDetector(Node):
             self.gyroYl3 = True
 
         if self.failed_motor == 0:
-            if dgyro_dt[0] > 20 and dgyro_dt[1] < -15:
+            if dgyro_dt[0] > 10 and dgyro_dt[1] < -10:
                 self.failed_motor = 1
-            elif dgyro_dt[0] < -20 and dgyro_dt[1] > 15:
+            elif dgyro_dt[0] < -10 and dgyro_dt[1] > 10:
                 self.failed_motor = 2
-            elif dgyro_dt[0] < -20 and dgyro_dt[1] < -15:
+            elif dgyro_dt[0] < -10 and dgyro_dt[1] < -10:
                 self.failed_motor = 3
-            elif dgyro_dt[0] > 20 and dgyro_dt[1] > 15:
+            elif dgyro_dt[0] > 10 and dgyro_dt[1] > 10:
                 self.failed_motor = 4
 
             if self.gyroXg5 and self.gyroYl3:
