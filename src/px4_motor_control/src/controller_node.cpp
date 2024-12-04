@@ -385,7 +385,7 @@ void ControllerNode::update_control_loop()
     Eigen::VectorXd wrench;
     Eigen::Quaterniond desired_quaternion;
     controller_.compute_thrust_and_torque(&wrench, &desired_quaternion);
-    // controller_.computeTT(&wrench, &desired_quaternion);
+
     //  calculate throttles
     Eigen::VectorXd throttles;
     if (failed_motor_.load() != 0)

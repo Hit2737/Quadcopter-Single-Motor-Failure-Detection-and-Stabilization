@@ -38,9 +38,9 @@
 #include <iostream>
 
 // Function to write to the log file
-void write_log(const std::string &log_message)
+void write_log(const std::string &log_message, const std::string &log_file_name)
 {
-    std::string log_file_path = "src/px4_motor_control/logs/attitude_error.csv";
+    std::string log_file_path = "src/px4_motor_control/logs/" + log_file_name + ".csv";
 
     // Ensure the directory exists
     std::filesystem::create_directories(std::filesystem::path(log_file_path).parent_path());
@@ -82,6 +82,11 @@ void controller::compute_thrust_and_torque(
     const Eigen::Vector3d e_v =
         velocity_W_ - r_velocity_W_;
 
+    // Store the error through x, y, and z into a .csv file
+    // std::string log_file_name = "position_error_NC_1";
+    // std::string log_message = std::to_string(e_p(0)) + "," + std::to_string(e_p(1)) + "," + std::to_string(e_p(2));
+    // write_log(log_message, log_file_name);
+
     const Eigen::Vector3d I_a_d = -position_gain_.cwiseProduct(e_p) - velocity_gain_.cwiseProduct(e_v) + _uav_mass * _gravity * Eigen::Vector3d::UnitZ() + _uav_mass * r_acceleration_W_;
     thrust = I_a_d.dot(R_B_W_.col(2));
     Eigen::Vector3d B_z_d;
@@ -108,8 +113,9 @@ void controller::compute_thrust_and_torque(
     e_R << e_R_matrix(2, 1), e_R_matrix(0, 2), e_R_matrix(1, 0);
 
     // Store the error through roll, pitch, and yaw into a .csv file
-    std::string log_message = std::to_string(e_R(0)) + "," + std::to_string(e_R(1)) + "," + std::to_string(e_R(2));
-    write_log(log_message);
+    // log_file_name = "attitude_error_NC_1";
+    // log_message = std::to_string(e_R(0)) + "," + std::to_string(e_R(1)) + "," + std::to_string(e_R(2));
+    // write_log(log_message, log_file_name);
 
     // Compute the control torque
     const Eigen::Vector3d omega_ref =
