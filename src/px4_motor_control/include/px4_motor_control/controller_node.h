@@ -54,7 +54,7 @@
 
 #include <string>
 #include <atomic>
-#include "px4_offboard_lowlevel/controller.h"
+#include "px4_motor_control/controller.h"
 
 #include <chrono>
 using namespace std::chrono_literals;

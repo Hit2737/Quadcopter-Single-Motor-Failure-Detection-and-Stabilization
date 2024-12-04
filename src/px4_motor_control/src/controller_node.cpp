@@ -31,7 +31,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
-#include "px4_offboard_lowlevel/controller_node.h"
+#include "px4_motor_control/controller_node.h"
 #include <rclcpp/rclcpp.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <std_msgs/msg/int32.hpp>

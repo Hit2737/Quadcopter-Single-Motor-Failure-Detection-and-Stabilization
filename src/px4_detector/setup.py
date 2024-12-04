@@ -28,6 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'detector = px4_detector.detector:main',
+            'trajectory_publisher = px4_detector.trajectory_publisher:main',
         ],
     },
 )

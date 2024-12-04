@@ -27,10 +27,6 @@ add_executable(offboard_controller_node
   src/controller_node.cpp
 )
 
-add_executable(trajectory_publisher 
-  src/trajectory_publisher.cpp
-)
-
 # Add dependencies for the executables
 ament_target_dependencies(offboard_controller_node
   rclcpp
@@ -41,15 +37,7 @@ ament_target_dependencies(offboard_controller_node
   trajectory_msgs
 )
 
-ament_target_dependencies(trajectory_publisher
-  rclcpp
-  geometry_msgs
-)
-
 install(TARGETS offboard_controller_node
-  DESTINATION lib/${PROJECT_NAME})
-
-install(TARGETS trajectory_publisher
   DESTINATION lib/${PROJECT_NAME})
 
 install(PROGRAMS
