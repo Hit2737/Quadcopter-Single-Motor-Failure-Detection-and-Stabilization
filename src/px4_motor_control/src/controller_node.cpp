@@ -364,7 +364,7 @@ void ControllerNode::update_control_loop()
     Eigen::VectorXd throttles;
     if (failed_motor_.load() != 0)
     {
-        px4_inverse_not_failed(&throttles, &wrench);
+        px4_inverse_failed(&throttles, &wrench);
     }
     else
         px4_inverse_not_failed(&throttles, &wrench);
