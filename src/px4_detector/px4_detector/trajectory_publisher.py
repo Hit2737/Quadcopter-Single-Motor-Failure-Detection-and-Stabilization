@@ -21,7 +21,7 @@ class TrajectoryPublisherNode(Node):
 
         self.publisher_.publish(pose_stamped)
 
-        if self.k < 10:
+        if self.k < 22:
             self.k += 0.01
 
 def main(args=None):
