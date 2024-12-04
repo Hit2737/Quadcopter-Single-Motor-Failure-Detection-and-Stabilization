@@ -83,7 +83,7 @@ void controller::compute_thrust_and_torque(
         velocity_W_ - r_velocity_W_;
 
     // Store the error through x, y, and z into a .csv file
-    // std::string log_file_name = "position_error_NC_1";
+    // std::string log_file_name = "position_error_NC_4";
     // std::string log_message = std::to_string(e_p(0)) + "," + std::to_string(e_p(1)) + "," + std::to_string(e_p(2));
     // write_log(log_message, log_file_name);
 
@@ -113,7 +113,7 @@ void controller::compute_thrust_and_torque(
     e_R << e_R_matrix(2, 1), e_R_matrix(0, 2), e_R_matrix(1, 0);
 
     // Store the error through roll, pitch, and yaw into a .csv file
-    // log_file_name = "attitude_error_NC_1";
+    // log_file_name = "attitude_error_NC_4";
     // log_message = std::to_string(e_R(0)) + "," + std::to_string(e_R(1)) + "," + std::to_string(e_R(2));
     // write_log(log_message, log_file_name);
 

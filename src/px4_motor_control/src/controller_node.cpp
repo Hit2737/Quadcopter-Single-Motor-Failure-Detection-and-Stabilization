@@ -166,7 +166,6 @@ void ControllerNode::update_allocation_matrix(int failed_motor_)
     rotor_velocities_to_torques_and_thrust = k.asDiagonal() * rotor_velocities_to_torques_and_thrust;
 
     Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(3, 3);
-    // Eigen::MatrixXd rotor_velocities_to_torques_and_thrust_updated(4, 4);
 
     int _i = 0;
     for (int i = 0; i < 4; i++)
@@ -186,27 +185,9 @@ void ControllerNode::update_allocation_matrix(int failed_motor_)
         ++_i;
     }
 
-    // for (int i = 0; i < 4; i++)
-    // {
-    //     for (int j = 0; j < 4; j++)
-    //     {
-    //         if (i == 2 || j == failed_motor_ - 1)
-    //         {
-    //             rotor_velocities_to_torques_and_thrust_updated(i, j) = 0;
-    //         }
-    //         else
-    //         {
-    //             rotor_velocities_to_torques_and_thrust_updated(i, j) = rotor_velocities_to_torques_and_thrust(i, j);
-    //         }
-    //     }
-    // }
-
     torques_and_thrust_to_rotor_velocities_updated_.resize(3, 3);
-    // torques_and_thrust_to_rotor_velocities_updated_.resize(4, 4);
     torques_and_thrust_to_rotor_velocities_updated_ =
         rotor_velocities_to_torques_and_thrust_updated.completeOrthogonalDecomposition().pseudoInverse();
-
-    // torques_and_thrust_to_rotor_velocities_updated_ = pseudoInverse(rotor_velocities_to_torques_and_thrust_updated);
 
     RCLCPP_INFO(this->get_logger(), "Updated Allocation Matrix for failed motor %d", failed_motor_);
 }
@@ -255,8 +236,6 @@ void ControllerNode::px4_inverse_failed(Eigen::VectorXd *throttles, const Eigen:
         omega(i) = omega_temp(_i);
         _i++;
     }
-
-    // omega = torques_and_thrust_to_rotor_velocities_updated_ * (*wrench);
 
     omega = omega.cwiseSqrt();
     *throttles = (omega - (_zero_position_armed * ones_temp));
@@ -333,11 +312,6 @@ void ControllerNode::vehicle_odometry_callback(const px4_msgs::msg::VehicleOdome
                             position, orientation, velocity, angular_velocity);
 
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
-
-    if (failed_motor_.load() != 0 && position[2] < 0.5)
-    {
-        exit(0);
-    }
 }
 
 // Function to get the vehicle status message and update the current status (arming and offboard mode)
@@ -390,7 +364,7 @@ void ControllerNode::update_control_loop()
     Eigen::VectorXd throttles;
     if (failed_motor_.load() != 0)
     {
-        px4_inverse_failed(&throttles, &wrench);
+        px4_inverse_not_failed(&throttles, &wrench);
     }
     else
         px4_inverse_not_failed(&throttles, &wrench);
