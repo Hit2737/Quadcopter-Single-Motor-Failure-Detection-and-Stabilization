@@ -33,6 +33,28 @@
  ****************************************************************************/
 
 #include "../include/px4_motor_control/controller.h"
+#include <fstream>
+#include <filesystem>
+#include <iostream>
+
+// Function to write to the log file
+void write_log(const std::string &log_message)
+{
+    std::string log_file_path = "src/px4_motor_control/logs/attitude_error.csv";
+
+    // Ensure the directory exists
+    std::filesystem::create_directories(std::filesystem::path(log_file_path).parent_path());
+
+    std::ofstream log_file(log_file_path, std::ios::app);
+    if (!log_file.is_open())
+    {
+        std::cerr << "Unable to open file for writing error log" << std::endl;
+        return;
+    }
+
+    log_file << log_message << std::endl;
+    log_file.close();
+}
 
 controller::controller()
 {
@@ -84,6 +106,12 @@ void controller::compute_thrust_and_torque(
         0.5 * (R_d_w.transpose() * R_B_W_ - R_B_W_.transpose() * R_d_w);
     Eigen::Vector3d e_R;
     e_R << e_R_matrix(2, 1), e_R_matrix(0, 2), e_R_matrix(1, 0);
+
+    // Store the error through roll, pitch, and yaw into a .csv file
+    std::string log_message = std::to_string(e_R(0)) + "," + std::to_string(e_R(1)) + "," + std::to_string(e_R(2));
+    write_log(log_message);
+
+    // Compute the control torque
     const Eigen::Vector3d omega_ref =
         r_yaw_rate * Eigen::Vector3d::UnitZ();
     const Eigen::Vector3d e_omega = angular_velocity_B_ - R_B_W_.transpose() * R_d_w * omega_ref;
