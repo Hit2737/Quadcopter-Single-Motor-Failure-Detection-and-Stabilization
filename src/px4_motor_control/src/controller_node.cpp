@@ -314,7 +314,7 @@ void ControllerNode::vehicle_odometry_callback(const px4_msgs::msg::VehicleOdome
     controller_.setOdometry(position, orientation, velocity, angular_velocity);
 }
 
-// Function to get the vehicle status message and update the current status (arming and offboard mode)
+// Function to get the vehicle status message and update the current status (arming and offboard mode) 
 void ControllerNode::vehicle_status_callback(const px4_msgs::msg::VehicleStatus::SharedPtr status_msg)
 {
     current_status_ = *status_msg;
